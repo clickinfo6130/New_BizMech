@@ -1,0 +1,80 @@
+{
+  "app": {
+    "title": "BizMech",
+    "tagline": "机械零件浏览器 · 2D/3D 预览 · 下载"
+  },
+  "nav": {
+    "browse": "零件浏览器",
+    "search": "订单编码搜索",
+    "logout": "退出登录"
+  },
+  "login": {
+    "title": "登录",
+    "subtitle": "使用 BizMech 账号登录",
+    "username": "用户名",
+    "password": "密码",
+    "submit": "登录",
+    "mockHint": "开发模拟:任意用户名/密码均可。",
+    "error": "登录失败"
+  },
+  "category": {
+    "title": "分类",
+    "main": "大类",
+    "sub": "中类",
+    "mid": "小类",
+    "partType": "零件类型",
+    "empty": "未选择分类",
+    "backToTop": "返回顶部"
+  },
+  "spec": {
+    "title": "规格选择",
+    "empty": "请先选择零件",
+    "series": "系列",
+    "option": "选项",
+    "dimensions": "尺寸标识",
+    "apply": "应用",
+    "mainTab": "主零件",
+    "draw": "绘制",
+    "linkedTitle": "关联零件"
+  },
+  "preview": {
+    "title": "预览",
+    "2d": "2D",
+    "3d": "3D",
+    "front": "正视图",
+    "side": "侧视图",
+    "top": "俯视图",
+    "loading": "加载中…",
+    "empty": "选择零件后将在此显示"
+  },
+  "download": {
+    "title": "下载",
+    "step": "STEP",
+    "dwg": "DWG",
+    "iges": "IGES",
+    "stl": "STL",
+    "hint": "选择要保存的格式",
+    "nothing": "暂无可下载零件"
+  },
+  "search": {
+    "title": "订单编码搜索",
+    "placeholder": "例如 HBOLT|KS B 1002|M10",
+    "button": "搜索",
+    "notFound": "未找到订单编码",
+    "found": "已加载 {{partName}} ({{partCode}})"
+  },
+  "common": {
+    "loading": "加载中…",
+    "error": "发生错误",
+    "retry": "重试",
+    "close": "关闭",
+    "confirm": "确定",
+    "cancel": "取消"
+  },
+  "lang": {
+    "ko": "한국어",
+    "en": "English",
+    "ja": "日本語",
+    "zh": "中文"
+  }
+}

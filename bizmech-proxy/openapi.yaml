@@ -1,0 +1,497 @@
+openapi: 3.0.3
+info:
+  title: BizMech Backend API
+  version: 0.1.0
+  description: |
+    Contract between the BizMech React frontend and the server-side data
+    layer. Currently implemented by the Node.js proxy (`bizmech-proxy`).
+    The Java backend should implement the exact same paths / response
+    shapes so the frontend can switch via `VITE_API_MODE=http`.
+
+    All response bodies mirror the TypeScript types in
+    `BizMech-web/src/types/index.ts`.
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local Node.js proxy (dev)
+  - url: http://192.168.0.17:8080/api
+    description: LAN proxy (shared dev)
+
+tags:
+  - name: Auth
+  - name: Categories
+  - name: Parts
+  - name: Search
+  - name: Download
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in (returns bearer token)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResult' }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Resolve current user from bearer token
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Null when token is invalid
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/AuthUser' }
+                  - { type: 'null' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Invalidate token server-side (no-op for now)
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+
+  /categories/main:
+    get:
+      tags: [Categories]
+      summary: List top-level categories (STANDARD / MOTOR only)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MainCategory' }
+
+  /categories/sub:
+    get:
+      tags: [Categories]
+      summary: List subcategories under a main category
+      parameters:
+        - in: query
+          name: mainCatCode
+          required: true
+          schema: { type: string, example: STANDARD }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SubCategory' }
+
+  /categories/mid:
+    get:
+      tags: [Categories]
+      summary: List mid-categories under a subcategory (standard parts only)
+      parameters:
+        - in: query
+          name: subCatCode
+          required: true
+          schema: { type: string, example: STD_BEARING }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MidCategory' }
+
+  /parttypes:
+    get:
+      tags: [Categories]
+      summary: List part types under a mid-category
+      parameters:
+        - in: query
+          name: midCatCode
+          required: true
+          schema: { type: string, example: ST_BEARING }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PartType' }
+
+  /motor/parts:
+    get:
+      tags: [Categories]
+      summary: List motor parts (partspec rows) under a motor subcategory
+      description: |
+        Motor parts don't have `parttype` rows — they live directly in
+        `partspec` keyed by `part_type` ∈ {Servo, BLDC, Stepper, Geard}.
+      parameters:
+        - in: query
+          name: subCatCode
+          required: true
+          schema: { type: string, example: SERVO }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PartType' }
+
+  /parts/{partCode}/spec:
+    get:
+      tags: [Parts]
+      summary: Get a part's spec JSON (options, values, filter rules)
+      parameters:
+        - in: path
+          name: partCode
+          required: true
+          schema: { type: string, example: HBOLT }
+      responses:
+        '200':
+          description: OK (or null if unknown)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/PartSpec' }
+                  - { type: 'null' }
+
+  /parts/{partCode}/dimension-meta:
+    get:
+      tags: [Parts]
+      summary: Get dimensionmeta rows for a part (field types + is_key_field)
+      parameters:
+        - in: path
+          name: partCode
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DimensionMeta' }
+
+  /parts/{partCode}/dimension-keys:
+    get:
+      tags: [Parts]
+      summary: Get dimensionkeyoption rows for cascading key dropdowns
+      parameters:
+        - in: path
+          name: partCode
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DimensionKeyOption' }
+
+  /parts/{partCode}/dimension/find:
+    post:
+      tags: [Parts]
+      summary: Resolve a partdimension row by current key selections
+      parameters:
+        - in: path
+          name: partCode
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keyValues:
+                  type: object
+                  additionalProperties: { type: string }
+                  example: { List: M10, 용도: 기계용, 표준번호: 'KS B 1002' }
+      responses:
+        '200':
+          description: OK (or null if not resolvable)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/PartDimension' }
+                  - { type: 'null' }
+
+  /parts/find:
+    get:
+      tags: [Parts]
+      summary: Look up a part spec by display name OR part code (linked parts)
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string, example: 축 그리기 }
+      responses:
+        '200':
+          description: OK (or null)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/PartSpec' }
+                  - { type: 'null' }
+
+  /search:
+    get:
+      tags: [Search]
+      summary: Order-code search (returns spec + dimension + meta)
+      parameters:
+        - in: query
+          name: orderCode
+          required: true
+          schema: { type: string, example: 'HBOLT|KS B 1002|M10' }
+      responses:
+        '200':
+          description: OK (or null)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/SearchResult'
+                  - { type: 'null' }
+
+  /download:
+    post:
+      tags: [Download]
+      summary: Generate a CAD file for the current selection
+      description: |
+        The Node.js proxy returns a placeholder text blob encoded as a data
+        URL. The Java implementation should stream a real STEP/DWG/IGES/STL
+        file and return its URL (or binary).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DownloadRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DownloadResult' }
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string }
+
+    LoginResult:
+      type: object
+      required: [token, user]
+      properties:
+        token: { type: string }
+        user: { $ref: '#/components/schemas/AuthUser' }
+
+    AuthUser:
+      type: object
+      required: [id, name, roles]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        roles:
+          type: array
+          items: { type: string }
+
+    MainCategory:
+      type: object
+      required: [code, name, nameKr, isStandard, sortOrder, dbFileName]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        nameKr: { type: string }
+        isStandard: { type: boolean }
+        colorCode: { type: string, nullable: true }
+        sortOrder: { type: integer }
+        dbFileName: { type: string }
+
+    SubCategory:
+      type: object
+      required: [code, name, nameKr, mainCatCode, isVendor, sortOrder]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        nameKr: { type: string }
+        mainCatCode: { type: string }
+        isVendor: { type: boolean }
+        sortOrder: { type: integer }
+
+    MidCategory:
+      type: object
+      required: [code, name, nameKr, subCatCode, sortOrder]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        nameKr: { type: string }
+        subCatCode: { type: string }
+        sortOrder: { type: integer }
+
+    PartType:
+      type: object
+      required: [code, name, nameKr, midCatCode, hasSeries, sortOrder]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        nameKr: { type: string }
+        midCatCode: { type: string }
+        cmdCode: { type: string, nullable: true }
+        hasSeries: { type: boolean }
+        sortOrder: { type: integer }
+
+    PartSpec:
+      type: object
+      required: [id, partType, partCode, partName, series]
+      properties:
+        id: { type: integer }
+        partType: { type: string }
+        partCode: { type: string }
+        partName: { type: string }
+        series:
+          type: array
+          items: { $ref: '#/components/schemas/PartSeriesSpec' }
+
+    PartSeriesSpec:
+      type: object
+      required: [id, name, cmd, options]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        cmd: { type: string }
+        options:
+          type: array
+          items: { $ref: '#/components/schemas/PartOption' }
+
+    PartOption:
+      type: object
+      required: [id, name, defaultValue, isActive, values]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        defaultValue: { type: string }
+        isActive: { type: boolean }
+        type:
+          type: string
+          description: COMBOBOX | LISTBOX | EDITBOX | R_EDITBOX | CHECKBOX | RADIO
+        values:
+          type: array
+          items: { $ref: '#/components/schemas/PartOptionValue' }
+
+    PartOptionValue:
+      type: object
+      required: [enumid, name]
+      properties:
+        enumid:
+          oneOf: [{ type: integer }, { type: string }]
+        name: { type: string }
+        desc: { type: string }
+        filter:
+          oneOf:
+            - { type: array, items: { type: string } }
+            - { type: string }
+        filter_Values:
+          type: array
+          items:
+            type: array
+            items: { type: string }
+
+    DimensionMeta:
+      type: object
+      required: [partCode, fieldName, displayName, dataType, isKeyField, displayOrder]
+      properties:
+        partCode: { type: string }
+        fieldName: { type: string }
+        displayName: { type: string }
+        displayNameEn: { type: string }
+        dataType: { type: string }
+        unit: { type: string }
+        isKeyField: { type: boolean }
+        displayOrder: { type: integer }
+
+    DimensionKeyOption:
+      type: object
+      required: [partCode, keyFieldName, keyLevel, keyValue]
+      properties:
+        partCode: { type: string }
+        keyFieldName: { type: string }
+        keyLevel: { type: integer }
+        keyValue: { type: string }
+        parentKey: { type: string, nullable: true }
+
+    PartDimension:
+      type: object
+      required: [id, partCode, keyComposite, keyValues, dimensionData]
+      properties:
+        id: { type: integer }
+        partCode: { type: string }
+        keyComposite: { type: string }
+        keyValues:
+          type: object
+          additionalProperties: { type: string }
+        dimensionData:
+          type: object
+          additionalProperties:
+            oneOf: [{ type: number }, { type: string }]
+
+    SearchResult:
+      type: object
+      required: [spec, dimension, meta]
+      properties:
+        spec: { $ref: '#/components/schemas/PartSpec' }
+        dimension: { $ref: '#/components/schemas/PartDimension' }
+        meta:
+          type: array
+          items: { $ref: '#/components/schemas/DimensionMeta' }
+
+    DownloadRequest:
+      type: object
+      required: [partCode, keyComposite, format]
+      properties:
+        partCode: { type: string }
+        keyComposite: { type: string }
+        format:
+          type: string
+          enum: [STEP, DWG, IGES, STL]
+        locale: { type: string }
+
+    DownloadResult:
+      type: object
+      required: [fileName, mimeType, url]
+      properties:
+        fileName: { type: string }
+        mimeType: { type: string }
+        url: { type: string }

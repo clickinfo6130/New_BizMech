@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PartManager 3D Viewer</title>
+    <link rel="stylesheet" href="css/viewer.css">
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "./js/lib/three.module.js",
+            "three/addons/": "./js/lib/addons/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="viewer-container"></div>
+    <!-- view-indicator는 WPF 컨트롤바에서 관리 (WebView2 환경) -->
+    <div id="view-indicator" style="display:none;">ISO</div>
+    <!-- BizMech: postMessage bridge MUST load before the module. -->
+    <script src="js/bridge.js"></script>
+    <script type="module" src="js/partRenderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Visual Studio
+.vs/
+*.suo
+
+# Build output
+bin/
+obj/
+
+# Debug / Release
+Debug/
+Release/
+
+# 실행파일 및 라이브러리
+*.exe
+*.dll
+*.pdb
+*.config
+*.zip
+
+# 로그 / 임시파일
+*.log
+
+# Package file
+packages/
+
+# 참조용
+참조용/

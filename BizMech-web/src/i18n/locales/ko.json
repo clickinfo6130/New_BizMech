@@ -1,0 +1,80 @@
+{
+  "app": {
+    "title": "BizMech",
+    "tagline": "기계부품 브라우저 · 2D/3D 프리뷰 · 다운로드"
+  },
+  "nav": {
+    "browse": "부품 브라우저",
+    "search": "주문코드 조회",
+    "logout": "로그아웃"
+  },
+  "login": {
+    "title": "로그인",
+    "subtitle": "BizMech 계정으로 로그인하세요",
+    "username": "아이디",
+    "password": "비밀번호",
+    "submit": "로그인",
+    "mockHint": "개발용 목업: 아무 아이디/비밀번호로 로그인하실 수 있습니다.",
+    "error": "로그인에 실패했습니다"
+  },
+  "category": {
+    "title": "카테고리",
+    "main": "대분류",
+    "sub": "중분류",
+    "mid": "소분류",
+    "partType": "부품 종류",
+    "empty": "선택된 카테고리가 없습니다",
+    "backToTop": "상단으로"
+  },
+  "spec": {
+    "title": "스펙 선택",
+    "empty": "먼저 부품을 선택하세요",
+    "series": "시리즈",
+    "option": "옵션",
+    "dimensions": "치수 식별",
+    "apply": "적용",
+    "mainTab": "주 부품",
+    "draw": "작도",
+    "linkedTitle": "연결부품"
+  },
+  "preview": {
+    "title": "프리뷰",
+    "2d": "2D",
+    "3d": "3D",
+    "front": "정면도",
+    "side": "측면도",
+    "top": "평면도",
+    "loading": "로딩 중...",
+    "empty": "부품을 선택하면 여기에 표시됩니다"
+  },
+  "download": {
+    "title": "다운로드",
+    "step": "STEP",
+    "dwg": "DWG",
+    "iges": "IGES",
+    "stl": "STL",
+    "hint": "원하는 포맷을 선택하여 저장하세요",
+    "nothing": "다운로드할 부품이 없습니다"
+  },
+  "search": {
+    "title": "주문코드 조회",
+    "placeholder": "예) HBOLT|KS B 1002|M10",
+    "button": "조회",
+    "notFound": "해당 주문코드를 찾을 수 없습니다",
+    "found": "{{partName}} ({{partCode}}) 을(를) 불러왔습니다"
+  },
+  "common": {
+    "loading": "불러오는 중...",
+    "error": "오류가 발생했습니다",
+    "retry": "다시 시도",
+    "close": "닫기",
+    "confirm": "확인",
+    "cancel": "취소"
+  },
+  "lang": {
+    "ko": "한국어",
+    "en": "English",
+    "ja": "日本語",
+    "zh": "中文"
+  }
+}

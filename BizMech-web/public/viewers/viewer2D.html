@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PartManager 2D Viewer</title>
+    <link rel="stylesheet" href="css/viewer2D.css">
+</head>
+<body>
+    <div id="canvas-container">
+        <canvas id="canvas2d"></canvas>
+    </div>
+    <!-- BizMech: postMessage bridge MUST load before the renderer. -->
+    <script src="js/bridge.js"></script>
+    <script src="js/partRenderer2D.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+{
+  "app": {
+    "title": "BizMech",
+    "tagline": "Mechanical part browser · 2D/3D preview · Download"
+  },
+  "nav": {
+    "browse": "Part Browser",
+    "search": "Order Code Search",
+    "logout": "Sign out"
+  },
+  "login": {
+    "title": "Sign in",
+    "subtitle": "Sign in with your BizMech account",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Sign in",
+    "mockHint": "Dev mock: any username/password works.",
+    "error": "Sign in failed"
+  },
+  "category": {
+    "title": "Category",
+    "main": "Main",
+    "sub": "Sub",
+    "mid": "Middle",
+    "partType": "Part Type",
+    "empty": "No category selected",
+    "backToTop": "Back to top"
+  },
+  "spec": {
+    "title": "Spec Selection",
+    "empty": "Pick a part first",
+    "series": "Series",
+    "option": "Option",
+    "dimensions": "Dimension Identity",
+    "apply": "Apply",
+    "mainTab": "Main Part",
+    "draw": "Draw",
+    "linkedTitle": "Linked Parts"
+  },
+  "preview": {
+    "title": "Preview",
+    "2d": "2D",
+    "3d": "3D",
+    "front": "Front",
+    "side": "Side",
+    "top": "Top",
+    "loading": "Loading…",
+    "empty": "Choose a part to preview it here"
+  },
+  "download": {
+    "title": "Download",
+    "step": "STEP",
+    "dwg": "DWG",
+    "iges": "IGES",
+    "stl": "STL",
+    "hint": "Choose a format to save",
+    "nothing": "Nothing to download yet"
+  },
+  "search": {
+    "title": "Order Code Search",
+    "placeholder": "e.g. HBOLT|KS B 1002|M10",
+    "button": "Search",
+    "notFound": "Order code not found",
+    "found": "Loaded {{partName}} ({{partCode}})"
+  },
+  "common": {
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "retry": "Retry",
+    "close": "Close",
+    "confirm": "OK",
+    "cancel": "Cancel"
+  },
+  "lang": {
+    "ko": "한국어",
+    "en": "English",
+    "ja": "日本語",
+    "zh": "中文"
+  }
+}

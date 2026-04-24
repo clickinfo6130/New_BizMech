@@ -45,16 +45,32 @@
     "side": "侧视图",
     "top": "俯视图",
     "loading": "加载中…",
-    "empty": "选择零件后将在此显示"
+    "empty": "选择零件后将在此显示",
+    "dimPanel": "尺寸面板",
+    "dimPanelHint": "缩写 ↔ 完整尺寸名参照面板"
   },
   "download": {
     "title": "下载",
     "step": "STEP",
+    "dxf": "DXF",
     "dwg": "DWG",
     "iges": "IGES",
     "stl": "STL",
+    "ipt": "IPT",
+    "sldprt": "SLDPRT",
+    "z3": "Z3",
     "hint": "选择要保存的格式",
-    "nothing": "暂无可下载零件"
+    "nothing": "暂无可下载零件",
+    "generating": "生成中...",
+    "cached": "已缓存",
+    "fresh": "新生成",
+    "warning": "几何下载 — 尺寸准确,但不支持参数化编辑",
+    "warningDetail": "STEP/DXF 仅保存最终几何。规格变更时请从网页重新下载。",
+    "notConfigured": "该格式暂不可用 (Phase 2 — 需 CAD Exchanger 集成)",
+    "error": "下载失败",
+    "retry": "重试",
+    "sizeBytes": "{{kb}} KB",
+    "generatedMs": "{{ms}} ms"
   },
   "search": {
     "title": "订单编码搜索",

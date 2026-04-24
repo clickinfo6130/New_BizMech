@@ -147,7 +147,15 @@ export class HttpPartApi implements IPartApi {
 
   // ── Download ────────────────────────────────────────
   async download(req: DownloadRequest): Promise<DownloadResult> {
-    const { data } = await this.http.post<DownloadResult>('/download', req);
+    // Explicitly forward extraDimensions — axios drops undefined props so
+    // passing the request as-is is safe, but keep it readable.
+    const { data } = await this.http.post<DownloadResult>('/download', {
+      partCode: req.partCode,
+      keyComposite: req.keyComposite,
+      format: req.format,
+      locale: req.locale,
+      extraDimensions: req.extraDimensions,
+    });
     return data;
   }
 }

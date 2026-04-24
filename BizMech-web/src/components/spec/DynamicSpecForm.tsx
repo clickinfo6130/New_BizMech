@@ -19,7 +19,7 @@
  *   activeTab === 'main'  → MainTabBody   (full form)
  *   activeTab === <name>  → LinkedTabBody (full form for that linked part)
  */
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Sliders, MousePointerSquareDashed, Link2, Info, Lock } from 'lucide-react';
@@ -31,6 +31,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { SpecTabs } from '@/components/spec/SpecTabs';
 import { cn } from '@/utils/cn';
 import {
+  computeReverseCascadeUpdates,
   filterExcludeValues,
   getFilteredValues,
   isOptionVisible,
@@ -185,20 +186,60 @@ export function DynamicSpecForm() {
       const kind = determineControlType(opt.type);
       if (kind === 'EDITBOX' || kind === 'R_EDITBOX' || kind === 'CHECKBOX') continue;
       if (!isOptionVisible(opt, selectedPath)) continue;
-      const current = specOptions[opt.id];
+      // Fall back to defaultValue when the user hasn't explicitly set
+      // this option — otherwise a valid default that becomes invalid
+      // after a parent change (e.g. 모터사이즈 was "15mm" by default but
+      // SGM7J+중관성 고속 has no 15mm entry) is never corrected, and
+      // the option's filter collapses to zero visible values on the
+      // NEXT selection → the row disappears from the form.
+      const current = specOptions[opt.id] ?? opt.defaultValue;
       if (current == null || current === '') continue;
-      const stillOk = filterExcludeValues(
-        getFilteredValues(opt, selectedPath),
-      ).some((v) => String(v.enumid) === String(current));
-      if (!stillOk) {
-        const first = filterExcludeValues(getFilteredValues(opt, selectedPath))[0];
-        if (first) setSpecOption(opt.id, String(first.enumid));
+      const filtered = filterExcludeValues(getFilteredValues(opt, selectedPath));
+      const stillOk = filtered.some((v) => String(v.enumid) === String(current));
+      if (!stillOk && filtered.length > 0) {
+        setSpecOption(opt.id, String(filtered[0].enumid));
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPath, firstSeries]);
 
   const dimension = useSelectionStore((s) => s.dimension);
+
+  // ── Reverse-cascade wrapper around setSpecOption ────────
+  //
+  // When the user picks a value whose filter_Values require different
+  // parent selections than the current selectedPath holds, we update the
+  // parents first — same tick, before setting the user's choice. This
+  // keeps the downstream options' filter chain consistent, so they
+  // refresh to first-valid values via the existing forward-cascade
+  // useEffect instead of evaporating (empty filter → `isOptionVisible`
+  // returns false → rendered as `not in allUIOptions` → vanished from
+  // the form layout).
+  //
+  // Example — motor SGM-7:
+  //   user selects 모델=SGM7J while 타입=0 (저관성 초소형).
+  //   SGM7J's filter_Values = [[0,1],[0,2]] → requires 타입 ∈ {1,2}.
+  //   This handler updates 타입=1 first, then sets 모델=1. The forward
+  //   cascade then resets 모터사이즈/전원전압/정격출력 to the first valid
+  //   values for the new (타입=1, 모델=1) pair.
+  const handleMainOptionChange = useCallback(
+    (optionId: number, enumIdStr: string) => {
+      if (!firstSeries) {
+        setSpecOption(optionId, enumIdStr);
+        return;
+      }
+      const opt = firstSeries.options.find((o) => o.id === optionId);
+      const val = opt?.values.find((v) => String(v.enumid) === enumIdStr);
+      if (val) {
+        const updates = computeReverseCascadeUpdates(val, selectedPath);
+        for (const [pid, penum] of Object.entries(updates)) {
+          setSpecOption(Number(pid), String(penum));
+        }
+      }
+      setSpecOption(optionId, enumIdStr);
+    },
+    [firstSeries, selectedPath, setSpecOption],
+  );
 
   // ── SyncLinkedPartOption: main → linked propagation ────
   //
@@ -425,7 +466,7 @@ export function DynamicSpecForm() {
             otherOptions={otherOptions}
             specOptions={specOptions}
             selectedPath={selectedPath}
-            onChange={setSpecOption}
+            onChange={handleMainOptionChange}
             hasKeyFields={keyFieldNames.length > 0}
           />
         ) : (
@@ -539,6 +580,28 @@ function LinkedTabBody({ partName }: { partName: string }) {
 
   // Only this linked part's own pairs (positional association).
   const myPairs = linkedInfo ? getPairsForLinkedName(linkedInfo, partName) : [];
+
+  // Reverse-cascade wrapper around setLinkedOption. See MainTabBody's
+  // handleMainOptionChange for the rationale — identical motivation,
+  // different scope (this linked part's own selectedPath + options).
+  const handleLinkedOptionChange = useCallback(
+    (optionId: number, enumIdStr: string) => {
+      if (!series) {
+        setLinkedOption(partName, optionId, enumIdStr);
+        return;
+      }
+      const opt = series.options.find((o) => o.id === optionId);
+      const val = opt?.values.find((v) => String(v.enumid) === enumIdStr);
+      if (val) {
+        const updates = computeReverseCascadeUpdates(val, selectedPath);
+        for (const [pid, penum] of Object.entries(updates)) {
+          setLinkedOption(partName, Number(pid), String(penum));
+        }
+      }
+      setLinkedOption(partName, optionId, enumIdStr);
+    },
+    [series, selectedPath, setLinkedOption, partName],
+  );
 
   // Keep linked options in range when parents change.
   // ★ Locked (affected-by-main) options are NEVER auto-corrected —
@@ -654,7 +717,7 @@ function LinkedTabBody({ partName }: { partName: string }) {
                 option={opt}
                 values={filterExcludeValues(getFilteredValues(opt, selectedPath))}
                 current={linkedOpts[opt.id] ?? opt.defaultValue}
-                onChange={(v) => setLinkedOption(partName, opt.id, v)}
+                onChange={(v) => handleLinkedOptionChange(opt.id, v)}
                 locked={!!lockSource}
                 lockSource={lockSource}
               />
@@ -676,7 +739,7 @@ function LinkedTabBody({ partName }: { partName: string }) {
                 option={opt}
                 values={filterExcludeValues(getFilteredValues(opt, selectedPath))}
                 current={linkedOpts[opt.id] ?? opt.defaultValue}
-                onChange={(v) => setLinkedOption(partName, opt.id, v)}
+                onChange={(v) => handleLinkedOptionChange(opt.id, v)}
                 locked={!!lockSource}
                 lockSource={lockSource}
               />

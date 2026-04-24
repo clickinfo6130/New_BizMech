@@ -45,16 +45,32 @@
     "side": "Side",
     "top": "Top",
     "loading": "Loading…",
-    "empty": "Choose a part to preview it here"
+    "empty": "Choose a part to preview it here",
+    "dimPanel": "Dim panel",
+    "dimPanelHint": "Abbreviation ↔ full dimension name reference"
   },
   "download": {
     "title": "Download",
     "step": "STEP",
+    "dxf": "DXF",
     "dwg": "DWG",
     "iges": "IGES",
     "stl": "STL",
+    "ipt": "IPT",
+    "sldprt": "SLDPRT",
+    "z3": "Z3",
     "hint": "Choose a format to save",
-    "nothing": "Nothing to download yet"
+    "nothing": "Nothing to download yet",
+    "generating": "Generating...",
+    "cached": "cached",
+    "fresh": "fresh",
+    "warning": "Geometry download — dimensions accurate, parametric editing not available",
+    "warningDetail": "STEP/DXF store final geometry only. Re-download from the web when the spec changes.",
+    "notConfigured": "This format is not yet available (Phase 2 — CAD Exchanger required)",
+    "error": "Download failed",
+    "retry": "Retry",
+    "sizeBytes": "{{kb}} KB",
+    "generatedMs": "{{ms}} ms"
   },
   "search": {
     "title": "Order Code Search",

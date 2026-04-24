@@ -8,10 +8,66 @@
  * 
  * 지원 부품 (13종):
  *   볼트류: HBOLT, SBOLT, SRBOLT, FBOLT, FLBOLT, STBOLT, SQBOLT
- *   모터류: SERVO_MOTOR (서보모터 SGM-7 계열)
+ *   모터류: SERVO_MOTOR (서보모터 SGM-7 계열, v50: Brake 옵션 지원)
  *   너트류: NUT(HNUT), FNUT
  *   와셔류: PWAS, SWAS
  *   베어링: DGBB (깊은 홈 볼 베어링)
+ *
+ * ═══════════════════════════════════════════════════════════════
+ *  v50 변경점 (2026.04 — 1세션차: 모터 옵션 인프라 + Brake)
+ * ═══════════════════════════════════════════════════════════════
+ *   1. updateModel()에 motorOptions 파라미터 추가 (C# 측 SpecSelectorResponse.Options 전달)
+ *   2. resolveMotorOpts() 헬퍼 — 옵션 명시 우선, 없으면 dims 기반 자동 판정
+ *      (C++ MotorCreator::SetMotorOptions 로직 동일)
+ *   3. buildServoMotor / buildServoMotorDimOnly에 Brake 분기:
+ *      - hasBrake=true → L1/L2/L3/LX를 LO1(LLO)/LO2/LO3/LO로 자동 치환
+ *      - Brake Module (steelDark, 2mm 안쪽) + Brake Cover (aluminum, 도넛 속빔) 추가
+ *      - Encoder 위치를 [-(L2+SL) ~ -L1]로 자동 시프트
+ *   4. Encoder connector encMidY 버그 수정 (구간 중점 사용)
+ *
+ * ═══════════════════════════════════════════════════════════════
+ *  v50 변경점 (2026.04 — 2세션차: Gearhead 분기)
+ * ═══════════════════════════════════════════════════════════════
+ *   1. buildServoMotor에 hasGearhead 분기:
+ *      - hasGearhead=true 시 모터 샤프트/베어링 보스 숨김 (감속기 내부로 가려짐)
+ *      - Gearhead Body(G_LD 원통 or G_LC*0.95 사각 폴백) + Flange(G_LC×G_LG)
+ *        + Pilot1(G_LB×G_LE) + Pilot2(G_LD×pilot2Len) 플랜지 앞쪽(+Y)에 추가
+ *      - 감속기 출력축 다단 (G_B→G_C→G_S) 구현 (C++ CreateGearheadShaftPart 포팅)
+ *      - PCD G_LA에 4개 × Ø G_LZ 마운팅 홀
+ *   2. buildServoMotorDimOnly에 Gearhead 치수선 분기:
+ *      - 길이: G_LG, G_LE, G_LL/G_LLO, G_LR (+X 방향 별도 레벨로 겹침 방지)
+ *      - 지름: Ø G_S, G_LB, G_LA PCD (Y 위치 분산)
+ *      - 폭: G_LC (플랜지 외곽), G_LD (바디/Pilot2)
+ *
+ * ═══════════════════════════════════════════════════════════════
+ *  v50 변경점 (2026.04 — 3세션차: Stepper 모터 + OilSeal 인식)
+ * ═══════════════════════════════════════════════════════════════
+ *   1. buildStepperMotor / buildStepperMotorDimOnly 신규:
+ *      - NEMA 사각 프레임 (단일 블록, 엔코더 없음)
+ *      - 짧은 샤프트 (LR × S) + 리드선 출구 (MnL 길이, -Y → -Z L자 케이블)
+ *      - Brake 옵션 지원 (Servo와 동일 규칙으로 SL 길이 Brake Module 추가)
+ *      - 마운팅 홀 45° × 4개 (NEMA 표준 PCD)
+ *   2. PART_BUILDERS에 STEPPER_MOTOR 등록 — SMOT/PKP/PKE/STEP_MOTOR 키워드로 매칭
+ *   3. resolveMotorOpts에 hasOilSeal 자동 판정 추가 (LB1 > 0 || LE1 > 0)
+ *      → 향후 OilSeal 커버 3단 테이퍼 구현 시 활용 예정
+ *   4. partRenderer2D.js 대응 업데이트 — options 인프라, drawServoMotor_Side/Top
+ *      Brake/Gearhead 분기, drawStepperMotor_* 신규 3면도
+ *
+ * ═══════════════════════════════════════════════════════════════
+ *  v50 변경점 (2026.04 — 4세션차: 커넥터 상세화 IX40 + 본체 소켓 핀)
+ * ═══════════════════════════════════════════════════════════════
+ *   1. MAT에 stainlessBrush, brassGold 재질 추가
+ *   2. _buildIX40Plug 헬퍼 신규 — C++ CreateDetailedIX40Part 포팅
+ *      - Cable Outlet(고무 원통) + Connector Body(테이퍼) + Mating Shell(A-Key 외곽, 스테인레스)
+ *        + Pin Holes 8개 작은 사각 홀
+ *      - alongDir 파라미터로 임의 방향 진행 지원, scale 배율 지원
+ *   3. _buildConnectorSocket 헬퍼 신규 — 본체 소켓 상세화
+ *      - 검정 플라스틱 셸 + 어두운 개구부 + 4개 금색 핀(brassGold)
+ *      - facing 파라미터로 핀 개구 방향 자유 설정
+ *   4. _buildLCable의 endConnector를 {type:'IX40', scale} 또는 'IX40' 문자열로 지정 가능
+ *      (기존 {w,h,d,material} 객체 형태도 하위 호환 유지)
+ *   5. buildServoMotor의 엔코더 커넥터 섹션이 _buildConnectorSocket + IX40 플러그 사용
+ *      → 이미지 2의 본체 상단 소켓 + 케이블 끝 플러그 마킹 영역 시각적으로 재현
  */
 
 import * as THREE from 'three';
@@ -31,10 +87,30 @@ let gridHelper = null;
 let currentPartCode = '';
 let currentDimensions = {};
 let currentLinkedParts = [];   // ★ 연결부품 목록 { partCode, dimensions, isDrawEnabled, ... }
+let currentMotorOptions = {};  // ★ v50 모터 옵션 { hasBrake, hasGearhead, hasEncoder, hasOilSeal, hasConnector, bodyType, shaftType, flangType }
+
+// ═══════════════════════════════════════════════
+// ★ 치수 참조 패널 — 약어 ↔ 전체명 매핑
+//   renderedDimensions: 실제로 addDimLabel이 호출된 치수만 수집
+//   currentDimMeta: C#에서 전달된 { field_name → display_name } 매핑
+// ═══════════════════════════════════════════════
+let renderedDimensions = [];  // 이번 렌더링에서 실제 그려진 치수 [{ name, value }]
+let currentDimMeta     = {};  // { "LX": "전체 길이", "LB": "Body 길이", ... }
+// ★ 패널 UI 텍스트 (C# 에서 현재 언어에 맞게 번역해 전달)
+//   __panel_title / __panel_empty / __panel_no_mapping / __panel_count_unit
+//   fallback: 한국어 기본값 (C# 이 빈 dimMeta 를 보낼 경우 대비)
+let currentPanelText = {
+    title:       '📏 치수 정보',
+    empty:       '표시된 치수가 없습니다',
+    noMapping:   '매핑된 치수명 없음',
+    countUnit:   '개'
+};
+
 let options = {
     dimensions: true,
     wireframe: false,
-    grid: true
+    grid: true,
+    dimPanel: false           // ★ 치수 참조 패널 표시 여부 (기본 OFF)
 };
 
 // ── 재질 ──
@@ -178,7 +254,9 @@ const MAT = {
     steelCast:   () => new THREE.MeshStandardMaterial({ color: 0xC8CCD0, metalness: 0.55, roughness: 0.42 }),
     steelMild:   () => new THREE.MeshStandardMaterial({ color: 0xB4B9BE, metalness: 0.55, roughness: 0.35 }),
     steelDark:   () => new THREE.MeshStandardMaterial({ color: 0x69707A, metalness: 0.42, roughness: 0.50 }),
+    stainlessBrush:() => new THREE.MeshStandardMaterial({ color: 0xD0D4D8, metalness: 0.65, roughness: 0.40 }),   // ★ v50 커넥터 Mating Shell용
     chrome:      () => new THREE.MeshStandardMaterial({ color: 0xC8CDD3, metalness: 0.90, roughness: 0.12 }),
+    brassGold:   () => new THREE.MeshStandardMaterial({ color: 0xE2B55D, metalness: 0.85, roughness: 0.25 }),     // ★ v50 커넥터 핀용
     plasticBlack:() => new THREE.MeshStandardMaterial({ color: 0x1A1A1A, metalness: 0.25, roughness: 0.72 }),
     plasticDark: () => new THREE.MeshStandardMaterial({ color: 0x1E1E22, metalness: 0.40, roughness: 0.65 }),
     rubberBlack: () => new THREE.MeshStandardMaterial({ color: 0x2A2A2A, metalness: 0.10, roughness: 0.85 }),
@@ -359,19 +437,24 @@ function _buildMountingHoles(opts) {
 }
 
 /**
- * L자 케이블 생성 (커넥터 출구 → 90° 꺾임 → 긴 구간 → 끝 커넥터).
+ * L자/S자 케이블 생성 (커넥터 출구 → 꺾임 1~2회 → 끝 커넥터).
+ *
  * @param {object} opts
- *   start     : THREE.Vector3 시작점 (커넥터 출구)
- *   dir1      : 1단계 방향 ('+z', '-z', '+y', '-y', '+x', '-x')
- *   len1      : 1단계 길이
- *   dir2      : 2단계 방향 (꺾임 후)
- *   len2      : 2단계 길이
- *   dia       : 케이블 지름
- *   material  : 케이블 재질 (MAT.rubberBlack() 기본)
- *   endConnector : { w, h, d, material } — 끝 커넥터 박스 (null이면 없음)
+ *   start        : THREE.Vector3 시작점 (커넥터 출구)
+ *   dir1         : 1단계 방향 ('+z', '-z', '+y', '-y', '+x', '-x')
+ *   len1         : 1단계 길이
+ *   dir2         : 2단계 방향 (꺾임 후)
+ *   len2         : 2단계 길이
+ *   dir3         : (선택) 3단계 방향 — 지정 시 S자 경로
+ *   len3         : (선택) 3단계 길이
+ *   dia          : 케이블 지름
+ *   material     : 케이블 재질 (MAT.rubberBlack() 기본)
+ *   endConnector : 끝 커넥터 — null | 'IX40' | {type:'IX40',scale} | {w,h,d,material}
  */
 function _buildLCable(opts) {
-    const { start, dir1, len1, dir2, len2, dia,
+    const { start, dir1, len1, dir2, len2,
+            dir3 = null, len3 = 0,
+            dia,
             material = MAT.rubberBlack(),
             endConnector = null } = opts;
 
@@ -382,63 +465,322 @@ function _buildLCable(opts) {
     }[d]);
     const v1 = dirVec(dir1), v2 = dirVec(dir2);
     if (!v1 || !v2) return;
-
-    // 1단계 중심
-    const mid1 = new THREE.Vector3(
-        start.x + v1[0] * len1 / 2,
-        start.y + v1[1] * len1 / 2,
-        start.z + v1[2] * len1 / 2
-    );
-    // 꺾임점
-    const elbow = new THREE.Vector3(
-        start.x + v1[0] * len1,
-        start.y + v1[1] * len1,
-        start.z + v1[2] * len1
-    );
-    // 2단계 중심
-    const mid2 = new THREE.Vector3(
-        elbow.x + v2[0] * len2 / 2,
-        elbow.y + v2[1] * len2 / 2,
-        elbow.z + v2[2] * len2 / 2
-    );
-    // 끝점
-    const endPt = new THREE.Vector3(
-        elbow.x + v2[0] * len2,
-        elbow.y + v2[1] * len2,
-        elbow.z + v2[2] * len2
-    );
+    const v3 = dir3 ? dirVec(dir3) : null;
+    const has3rd = !!(v3 && len3 > 0);
 
     // 축 방향을 Y축(기본 Cylinder)에서 회전시키는 함수
     const makeAlignedCyl = (dirKey, length, mid) => {
         const g = new THREE.CylinderGeometry(dia / 2, dia / 2, length, 12);
-        // Y축 → 필요 방향 회전
         if (dirKey === '+x' || dirKey === '-x') g.applyMatrix4(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
         else if (dirKey === '+z' || dirKey === '-z') g.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-        // y 방향은 그대로
         const m = new THREE.Mesh(g, material.clone());
         m.position.copy(mid);
         modelGroup.add(m);
         return m;
     };
+    const makeElbow = (at) => {
+        const eg = new THREE.SphereGeometry(dia / 2 * 1.15, 12, 8);
+        const em = new THREE.Mesh(eg, material.clone());
+        em.position.copy(at);
+        modelGroup.add(em);
+    };
 
+    // 1단계
+    const mid1 = new THREE.Vector3(
+        start.x + v1[0] * len1 / 2,
+        start.y + v1[1] * len1 / 2,
+        start.z + v1[2] * len1 / 2
+    );
+    const elbow1 = new THREE.Vector3(
+        start.x + v1[0] * len1,
+        start.y + v1[1] * len1,
+        start.z + v1[2] * len1
+    );
     makeAlignedCyl(dir1, len1, mid1);
+    makeElbow(elbow1);
 
-    // 엘보 (구)
-    const elbowGeo = new THREE.SphereGeometry(dia / 2 * 1.15, 12, 8);
-    const elbowMesh = new THREE.Mesh(elbowGeo, material.clone());
-    elbowMesh.position.copy(elbow);
-    modelGroup.add(elbowMesh);
-
+    // 2단계
+    const mid2 = new THREE.Vector3(
+        elbow1.x + v2[0] * len2 / 2,
+        elbow1.y + v2[1] * len2 / 2,
+        elbow1.z + v2[2] * len2 / 2
+    );
+    const elbow2 = new THREE.Vector3(
+        elbow1.x + v2[0] * len2,
+        elbow1.y + v2[1] * len2,
+        elbow1.z + v2[2] * len2
+    );
     makeAlignedCyl(dir2, len2, mid2);
+
+    // 3단계 (선택)
+    let endPt;
+    if (has3rd) {
+        makeElbow(elbow2);
+        const mid3 = new THREE.Vector3(
+            elbow2.x + v3[0] * len3 / 2,
+            elbow2.y + v3[1] * len3 / 2,
+            elbow2.z + v3[2] * len3 / 2
+        );
+        endPt = new THREE.Vector3(
+            elbow2.x + v3[0] * len3,
+            elbow2.y + v3[1] * len3,
+            elbow2.z + v3[2] * len3
+        );
+        makeAlignedCyl(dir3, len3, mid3);
+    } else {
+        endPt = elbow2;
+    }
 
     // 끝 커넥터
     if (endConnector) {
-        const { w = dia * 2, h = dia * 2, d: ed = dia * 1.5,
-                material: endMat = MAT.plasticBlack() } = endConnector;
-        const eg = new THREE.BoxGeometry(w, h, ed);
-        const em = new THREE.Mesh(eg, endMat);
-        em.position.copy(endPt);
-        modelGroup.add(em);
+        // ★ v50 커넥터 상세화: endConnector 값에 따라 분기
+        //   'IX40' 문자열 : IX40 커넥터 플러그 (Yaskawa 엔코더용 표준)
+        //   객체 {w,h,d,material} : 기존 간단 박스 (하위 호환)
+        if (endConnector === 'IX40' || (endConnector.type === 'IX40')) {
+            // IX40 플러그 — 케이블 끝단에서 케이블 진행 방향(마지막 단계)으로 이어서 붙음
+            const scale = (typeof endConnector === 'object' && endConnector.scale) || 1.0;
+            const finalDir = has3rd ? dir3 : dir2;
+            _buildIX40Plug({
+                origin: endPt,
+                alongDir: finalDir,
+                cableDia: dia,
+                scale: scale
+            });
+        } else {
+            // 기존 간단 박스 (하위 호환)
+            const { w = dia * 2, h = dia * 2, d: ed = dia * 1.5,
+                    material: endMat = MAT.plasticBlack() } = endConnector;
+            const eg = new THREE.BoxGeometry(w, h, ed);
+            const em = new THREE.Mesh(eg, endMat);
+            em.position.copy(endPt);
+            modelGroup.add(em);
+        }
+    }
+}
+
+/**
+ * ★ v50: IX40 커넥터 플러그 (Yaskawa 엔코더 표준 커넥터, 22.9mm × 14.3mm × 8.4mm).
+ *
+ * C++ MotorCreator::CreateDetailedIX40Part 포팅.
+ * 4개 구성:
+ *   [1] Cable Outlet    — 고무 부트, Ø6.8 × 길이 3.2 (검정)
+ *   [2] Connector Body  — 테이퍼 본체, 14.0(L) × 14.3(H) × 8.4(W) (검정 플라스틱)
+ *                         테이퍼: 처음 3mm는 좁음(= Outlet 지름), 6mm에 걸쳐 넓어지다가 5mm 평탄
+ *   [3] Mating Shell    — 전면 체결부, 5.7(L) × 7.15(H) × 4.2(W), 스테인레스 브러시 재질
+ *                         A-Key 외곽(우측 하단 모따기) + 중앙 ▣ 홀
+ *   [4] Pin Holes       — Mating Shell 전면 8개 작은 사각 홀 (시각적으로 2×4 격자 어두운 마크로 표현)
+ *
+ * C++ 좌표: X 방향이 플러그 진행 축 (케이블 끝 → 전면 체결부)
+ * JS 매핑: alongDir 파라미터로 임의 방향 지정 (기본 '+y')
+ *
+ *  @param {object} opts
+ *    origin    : THREE.Vector3 — 케이블 끝단 위치 (Outlet 후면 중심)
+ *    alongDir  : 플러그 진행 방향 ('+x','-x','+y','-y','+z','-z')
+ *    cableDia  : 케이블 지름 (Outlet 기본 지름으로 사용, 없으면 6.8mm)
+ *    scale     : 전체 크기 배율 (기본 1.0)
+ */
+function _buildIX40Plug(opts) {
+    const { origin, alongDir = '+y', cableDia, scale = 1.0 } = opts;
+
+    // 치수 (C++ 원본: m_unit=1 기준 mm 단위)
+    const Length_Outlet       = 3.2  * scale;
+    const Length_Body         = 14.0 * scale;
+    const Length_MatingShell  = 5.7  * scale;
+    const Length_Total        = Length_Outlet + Length_Body + Length_MatingShell;   // 22.9
+    const Dia_CableOutlet     = (cableDia || 6.8) * scale;  // 케이블 지름 있으면 우선
+    const Height_Total        = 14.3 * scale;
+    const Width_Body          = 8.4  * scale;
+    const Height_MatingShell  = 7.15 * scale;
+    const Width_MatingShell   = 4.2  * scale;
+
+    // ─── 구성요소를 먼저 로컬 좌표(+X를 진행축)로 그린 뒤 회전/이동 ───
+    const plugGroup = new THREE.Group();
+
+    // [1] Cable Outlet (원통, 로컬 X=[0, Length_Outlet])
+    const outletGeo = new THREE.CylinderGeometry(Dia_CableOutlet / 2, Dia_CableOutlet / 2, Length_Outlet, 16);
+    // Cylinder는 기본 Y축 방향 → Z축 회전해서 X축으로 눕힘
+    outletGeo.applyMatrix4(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
+    const outletMesh = new THREE.Mesh(outletGeo, MAT.rubberBlack());
+    outletMesh.position.x = Length_Outlet / 2;
+    plugGroup.add(outletMesh);
+
+    // [2] Connector Body (테이퍼, Extrude XY 평면 프로파일)
+    //   C++ SetSketchPoint 좌표를 Three.js Shape로 재구성
+    const xStart      = Length_Outlet;         // 3.2
+    const xTaperStart = xStart + 3.0 * scale;  // 6.2
+    const xTaperEnd   = xTaperStart + 6.0 * scale; // 12.2
+    const xBodyEnd    = xStart + Length_Body;  // 17.2
+
+    const hSmall = Dia_CableOutlet / 2;        // 시작부는 Outlet 지름과 같게
+    const hLarge = Height_Total / 2;            // 7.15
+
+    const bodyShape = new THREE.Shape();
+    bodyShape.moveTo(xStart,      hSmall);
+    bodyShape.lineTo(xTaperStart, hSmall);
+    bodyShape.lineTo(xTaperEnd,   hLarge);
+    bodyShape.lineTo(xBodyEnd,    hLarge);
+    bodyShape.lineTo(xBodyEnd,   -hLarge);
+    bodyShape.lineTo(xTaperEnd,  -hLarge);
+    bodyShape.lineTo(xTaperStart,-hSmall);
+    bodyShape.lineTo(xStart,     -hSmall);
+    bodyShape.closePath();
+
+    const bodyGeo = new THREE.ExtrudeGeometry(bodyShape, {
+        depth: Width_Body,
+        bevelEnabled: false
+    });
+    // Extrude는 +Z 방향으로 돌출됨 → 중심이 Z=Width_Body/2. 이를 Z=0 기준 중심으로 이동
+    bodyGeo.translate(0, 0, -Width_Body / 2);
+    const bodyMesh = new THREE.Mesh(bodyGeo, MAT.plasticBlack());
+    plugGroup.add(bodyMesh);
+
+    // [3] Mating Shell (A-Key 외곽 + 내부 홀, xBodyEnd부터 Length_MatingShell 길이)
+    //   C++ 순서: 외곽 직사각형(우측 하단 chamfer) + 내부 ▣ 홀
+    //   JS: 외곽 Shape + holes로 Extrude
+    const mw2 = Width_MatingShell / 2, mh2 = Height_MatingShell / 2;
+    const inW = mw2 * 0.5, inH = mh2 * 0.8, chamfer = 1.0 * scale;
+
+    // Mating Shell은 YZ 평면에서 스케치한 뒤 X 방향으로 Extrude
+    //   Shape 좌표: (y, z)를 (Shape.x, Shape.y)로 매핑 → Extrude 후 회전으로 +X 진행축 만듦
+    const shellShape = new THREE.Shape();
+    shellShape.moveTo(-mw2, -mh2);
+    shellShape.lineTo( mw2 - chamfer, -mh2);
+    shellShape.lineTo( mw2, -mh2 + chamfer);
+    shellShape.lineTo( mw2,  mh2);
+    shellShape.lineTo(-mw2,  mh2);
+    shellShape.closePath();
+
+    // 내부 ▣ 홀 (사각)
+    const shellHole = new THREE.Path();
+    shellHole.moveTo(-inW, -inH);
+    shellHole.lineTo( inW, -inH);
+    shellHole.lineTo( inW,  inH);
+    shellHole.lineTo(-inW,  inH);
+    shellHole.closePath();
+    shellShape.holes.push(shellHole);
+
+    const shellGeo = new THREE.ExtrudeGeometry(shellShape, {
+        depth: Length_MatingShell,
+        bevelEnabled: false
+    });
+    // Shape의 (x,y)=(W,H) 평면을 Extrude하면 Z방향으로 뻗음 → X방향으로 정렬하기 위해 Y축 중심 -90° 회전
+    shellGeo.rotateY(Math.PI / 2);
+    // 회전 후 X=0 이 원점이 되도록 이동은 shellMesh.position으로 처리
+    const shellMesh = new THREE.Mesh(shellGeo, MAT.stainlessBrush());
+    shellMesh.position.x = xBodyEnd;   // Body 끝에서 시작
+    plugGroup.add(shellMesh);
+
+    // [4] Pin Holes — Mating Shell 전면 (xBodyEnd + Length_MatingShell) 위치에 작은 어두운 사각형 8개
+    //   C++: pitchY = Height_MatingShell/5 ≈ 1.43,  cav = 0.5,  4 pitches × 2 sides = 8개 핀 홀
+    //   JS: 전면 평면에 아주 얇은 BoxGeometry로 시각 표현
+    const pitchY = Height_MatingShell / 5;
+    const cav    = 0.5 * scale;
+    const lX = -(mw2 + inW) / 2;   // 좌측 핀 Y 좌표 (Shell 로컬)
+    const rX =  (mw2 + inW) / 2;   // 우측 핀 Y 좌표
+    const pinFaceX = xBodyEnd + Length_MatingShell - cav * 0.5;   // 전면 살짝 안쪽
+
+    for (let i = 0; i < 4; i++) {
+        const py = (1.5 * pitchY) - (i * pitchY);
+        for (const lR of [lX, rX]) {
+            const pg = new THREE.BoxGeometry(cav, cav, cav);
+            const pm = new THREE.Mesh(pg, MAT.plasticBlack().clone());
+            // 로컬 좌표에서 핀 홀을 그대로 배치: X=전면, Y=lR(폭방향), Z=py(높이방향)
+            // 단 Shell은 +X 진행이므로 lR(Y)은 Width 방향, py(Z)는 Height 방향
+            pm.position.set(pinFaceX, lR, py);
+            plugGroup.add(pm);
+        }
+    }
+
+    // ─── 회전 & 이동: 로컬(+X) → alongDir 방향 ───
+    //   기본 alongDir='+y' 면 X축을 Y축으로 회전 (Z축 중심 +90°)
+    const rotMap = {
+        '+x': () => {},                                      // 그대로
+        '-x': () => { plugGroup.rotateZ(Math.PI); },         // 180° Z
+        '+y': () => { plugGroup.rotateZ(Math.PI / 2); },     // +90° Z
+        '-y': () => { plugGroup.rotateZ(-Math.PI / 2); },    // -90° Z
+        '+z': () => { plugGroup.rotateY(-Math.PI / 2); },    // -90° Y
+        '-z': () => { plugGroup.rotateY(Math.PI / 2); }      // +90° Y
+    };
+    (rotMap[alongDir] || rotMap['+y'])();
+    plugGroup.position.copy(origin);
+
+    modelGroup.add(plugGroup);
+}
+
+/**
+ * ★ v50: 본체 상단 커넥터 소켓 상세화 — 박스 + 금색 핀.
+ *
+ * 기존 Box 커넥터(CW × CL × CH) 대신 사용.
+ * 실제 엔코더 소켓은 검정 셸 위에 짧은 금색 핀 배열이 노출된 형태.
+ *
+ *  @param {object} opts
+ *    center   : THREE.Vector3 — 박스 중심 좌표
+ *    w, h, d  : 박스 폭(X), 높이(Y), 깊이(Z)
+ *    facing   : 핀 돌출 방향 ('+x','-x','+y','-y','+z','-z') — 기본 '+z'(상단)
+ *    pinCount : 핀 개수 (기본 4)
+ */
+function _buildConnectorSocket(opts) {
+    const { center, w, h, d, facing = '+z', pinCount = 4 } = opts;
+
+    // ─── [1] 외곽 셸 (검정 플라스틱 박스) ───
+    const shellGeo = new THREE.BoxGeometry(w, h, d);
+    const shellMesh = new THREE.Mesh(shellGeo, MAT.plasticBlack());
+    shellMesh.position.copy(center);
+    modelGroup.add(shellMesh);
+
+    // ─── [2] 금색 핀 N개 — facing 방향 표면에 짧게 돌출 ───
+    //   핀이 셸 밖으로 너무 길게 나오지 않도록 pinLen을 작게 유지
+    //   (이미지의 "박스 위에 작은 마킹" 수준으로 표현)
+    const facingVec = {
+        '+x': [1, 0, 0], '-x': [-1, 0, 0],
+        '+y': [0, 1, 0], '-y': [0, -1, 0],
+        '+z': [0, 0, 1], '-z': [0, 0, -1]
+    }[facing] || [0, 0, 1];
+
+    // 핀 치수: 아주 작게 (이미지 마킹 크기와 비슷하도록)
+    const pinDia = Math.min(0.5, Math.min(w, h, d) * 0.08);
+    const pinLen = Math.min(0.8, Math.min(w, h, d) * 0.15);   // 표면 밖으로 아주 짧게
+
+    // facing 축에 해당하는 박스 면까지의 거리
+    const faceX = facing === '+x' ? w/2 : (facing === '-x' ? -w/2 : 0);
+    const faceY = facing === '+y' ? h/2 : (facing === '-y' ? -h/2 : 0);
+    const faceZ = facing === '+z' ? d/2 : (facing === '-z' ? -d/2 : 0);
+
+    // 핀 중심 위치: 면에서 facing 방향으로 pinLen/2만큼 돌출
+    const pinCenterX = center.x + faceX + facingVec[0] * pinLen / 2;
+    const pinCenterY = center.y + faceY + facingVec[1] * pinLen / 2;
+    const pinCenterZ = center.z + faceZ + facingVec[2] * pinLen / 2;
+
+    // 핀이 배열되는 주 배열축 결정 (facing 축 제외한 2축 중 박스가 긴 쪽)
+    const facingAxis = facing[1];   // 'x', 'y', 'z'
+    const otherDims = [
+        { axis: 'x', size: w, vec: [1, 0, 0] },
+        { axis: 'y', size: h, vec: [0, 1, 0] },
+        { axis: 'z', size: d, vec: [0, 0, 1] }
+    ].filter(a => a.axis !== facingAxis);
+    otherDims.sort((a, b) => b.size - a.size);
+    const longAxis = otherDims[0];   // 주 배열축 (긴 쪽)
+
+    // 핀 간격: 긴 축 크기의 55% 정도에 pinCount개 배치
+    const pinSpan = longAxis.size * 0.55;
+    const pinStep = pinCount > 1 ? pinSpan / (pinCount - 1) : 0;
+    const pinStart = -pinSpan / 2;
+
+    for (let i = 0; i < pinCount; i++) {
+        const off = pinStart + i * pinStep;
+        const px = pinCenterX + longAxis.vec[0] * off;
+        const py = pinCenterY + longAxis.vec[1] * off;
+        const pz = pinCenterZ + longAxis.vec[2] * off;
+
+        // 핀: facing 방향으로 길쭉한 작은 실린더
+        const pinGeo = new THREE.CylinderGeometry(pinDia / 2, pinDia / 2, pinLen, 8);
+        // CylinderGeometry는 기본 Y축 → facing에 맞게 회전
+        if (facing === '+x' || facing === '-x') pinGeo.applyMatrix4(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
+        else if (facing === '+z' || facing === '-z') pinGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+        // y는 그대로
+        const pinMesh = new THREE.Mesh(pinGeo, MAT.brassGold());
+        pinMesh.position.set(px, py, pz);
+        modelGroup.add(pinMesh);
     }
 }
 
@@ -767,6 +1109,7 @@ const PART_BUILDERS = {
     HBOLT:   { build: buildBolt,            dimOnly: buildBoltDimOnly },
     // 모터
     SERVO_MOTOR: { build: buildServoMotor,  dimOnly: buildServoMotorDimOnly },
+    STEPPER_MOTOR: { build: buildStepperMotor, dimOnly: buildStepperMotorDimOnly },   // ★ v50 3세션차
     // 너트
     FNUT:    { build: buildFlangeNut,       dimOnly: buildFlangeNutDimOnly },
     HNUT:    { build: buildNut,             dimOnly: buildNutDimOnly },
@@ -807,14 +1150,23 @@ function findBuilder(partCode) {
     if (code.includes('SWAS') || code.includes('SPRING'))        return PART_BUILDERS.SWAS;
     if (code.includes('PWAS') || code.includes('WASHER'))        return PART_BUILDERS.PWAS;
     // 모터
+    //   ★ v50 3세션차: Stepper를 Servo보다 먼저 매칭 (SMOT/STEP 키워드 우선)
+    if (code.includes('STEPPER') || code.includes('STEP_MOTOR') || code === 'SMOT' || code.startsWith('SMOT') ||
+        code.includes('PKP') || code.includes('PKE'))   // 오리엔탈모터 스텝 시리즈
+        return PART_BUILDERS.STEPPER_MOTOR;
     if (code.includes('SERVO') || code.includes('SGM') || code.includes('SERVO_MOTOR')) return PART_BUILDERS.SERVO_MOTOR;
     return PART_BUILDERS.HBOLT; // 기본값
 }
 
-function updateModel(partCode, dimensions, linkedParts) {
+function updateModel(partCode, dimensions, linkedParts, motorOptions) {
     currentPartCode    = partCode;
     currentDimensions  = dimensions;
     currentLinkedParts = linkedParts || [];
+    currentMotorOptions = motorOptions || {};   // ★ v50 모터 옵션 저장 (빈 객체로 폴백)
+
+    // ★ 치수 참조 패널 — 이번 렌더링 치수 수집 시작 (addDimLabel이 push)
+    renderedDimensions = [];
+
     clearGroup(modelGroup);
     clearGroup(dimGroup);
     clearGroup(linkedGroup);   // ★ 연결부품 그룹도 클리어
@@ -826,6 +1178,7 @@ function updateModel(partCode, dimensions, linkedParts) {
     if ((partCode === 'SD' || partCode === 'SN') && options.dimensions) {
         setTimeout(() => {
             clearGroup(dimGroup);
+            renderedDimensions = [];   // ★ SD/SN 재빌드 시 치수 수집 재시작
             const GS = 0.1;
             console.log('SD 전용 치수 강제 호출:', dimensions);
             buildSDDimOnly(dimensions, GS);
@@ -841,12 +1194,19 @@ function updateModel(partCode, dimensions, linkedParts) {
                     }
                 });
             }
+            // ★ SD/SN 치수 재생성 후 패널 업데이트
+            updateDimPanel();
         }, 200);
     }
     
     fitCameraToModel();
+
+    // ★ 렌더링 완료 → 치수 참조 패널 업데이트
+    updateDimPanel();
+
     logToCSharp('Model: ' + partCode + ' (' + builder.build.name + ')' +
-                ' linked=' + currentLinkedParts.length);
+                ' linked=' + currentLinkedParts.length +
+                ' dims=' + renderedDimensions.length);
 }
 
 function clearGroup(group) {
@@ -1255,6 +1615,118 @@ function motorDim(dims, key, fallback=0) {
     return Number(v);
 }
 
+/**
+ * ★ v50: 모터 옵션 해석 헬퍼
+ *
+ *  C# SpecSelectorResponse.Options (문자열 Dictionary)에서 받은 값을 우선 사용하고,
+ *  누락 시 dims 기반으로 자동 판정 (C++ SetMotorOptions 로직과 동일).
+ *
+ *  C++ SetMotorOptions 원본:
+ *    hasGearhead <- Info.GearHead 문자열에 "H" 포함
+ *    hasEncoder  <- Dim.EnH > 0 || Dim.EnL > 0
+ *    hasBrake    <- Dim.SL  > 0  (또는 Attachment_Options에 "E" 또는 "C")
+ *    hasConnector<- Dim.CW_MW > 0
+ *    hasOilSeal  <- (엑셀 정의) Dim.LB1 > 0 || Dim.LE1 > 0  (오일씰 커버 치수 존재)
+ *
+ *  ★ v50 핫픽스: 실전 데이터에서 옵션 명시도 안 되고 dims에 G_*도 안 들어오는 경우
+ *               (SpecWindow가 C# UpdatePreview 호출 시 SelectedData 미전달) 대응을 위해
+ *               여러 경로의 자동 판정을 추가.
+ *
+ *  감지 우선순위:
+ *    1) opts.hasGearhead가 명시적으로 지정됨 (C# options payload)
+ *    2) opts의 모든 value 중 "감속기/Gearhead/Reducer/HDS" 문자열 포함
+ *    3) dims에 G_S / G_LL / G_LX 중 하나라도 > 0
+ *    4) dims에 G_ 접두사 키가 존재 (값 상관 없이)  ← 모터 DB가 감속기 칼럼을 가진 경우
+ *    5) partCode에 감속기 패턴 존재 (YASKAWA: ...AH[C/M/B/L][숫자], 기타 제조사 대응)
+ *
+ *  @param {object} dims    motorDim()으로 접근 가능한 치수 객체
+ *  @param {object} opts    currentMotorOptions (문자열 값 Dictionary)
+ *  @param {string} partCode  currentPartCode (주문코드; 감속기 제품코드 패턴 감지용)
+ *  @returns {{hasBrake:boolean, hasGearhead:boolean, hasEncoder:boolean, hasOilSeal:boolean, hasConnector:boolean, bodyType:string, shaftType:string, flangType:string}}
+ */
+function resolveMotorOpts(dims, opts, partCode) {
+    opts = opts || {};
+    partCode = partCode || '';
+
+    // 문자열 "true"/"True"/"1" → true,  그 외(없음, "false" 등) → false
+    const asBool = (v) => {
+        if (v === undefined || v === null || v === '') return null;  // null = 미지정
+        const s = String(v).trim().toLowerCase();
+        return s === 'true' || s === '1' || s === 'yes';
+    };
+
+    // 옵션이 명시되어 있으면 그 값, 아니면 dims 기반 자동 판정
+    const optBrake     = asBool(opts.hasBrake);
+    const optGearhead  = asBool(opts.hasGearhead);
+    const optEncoder   = asBool(opts.hasEncoder);
+    const optOilSeal   = asBool(opts.hasOilSeal);
+    const optConnector = asBool(opts.hasConnector);
+
+    // ─── hasGearhead 다단계 자동 판정 ───
+    const scanOpts = (keywords) => {
+        // opts의 모든 value(선택 라벨 문자열)에 keyword 포함 여부 확인
+        // 예: opts["감속기 종류⑧"] = "H: 정밀 감속기 HDS"
+        //     opts["타입"] = "중관성 고속(감속기 일체형)"
+        for (const [k, v] of Object.entries(opts)) {
+            if (typeof v !== 'string') continue;
+            for (const kw of keywords) {
+                if (v.includes(kw)) return true;
+            }
+            // 키 자체에도 "감속기" 포함 가능 (예: "감속기 종류")
+            if (k && typeof k === 'string') {
+                for (const kw of keywords) {
+                    if (k.includes(kw)) {
+                        // 값이 공백/None 이 아닐 때만 감속기 있음으로 판정
+                        if (v.trim() !== '' &&
+                            !['없음', 'none', 'null', '0', 'no'].includes(v.trim().toLowerCase())) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    };
+
+    const hasGDimKey = dims ? Object.keys(dims).some(k => typeof k === 'string' && k.startsWith('G_') && motorDim(dims, k) > 0) : false;
+    const hasGDimPositive = motorDim(dims, 'G_S') > 0 || motorDim(dims, 'G_LL') > 0 || motorDim(dims, 'G_LX') > 0 || motorDim(dims, 'G_LC') > 0;
+
+    // 주문코드 패턴 감지: YASKAWA 표준은 AH[C/M/B/L/H][숫자] 형태 (예: SGM7J-A5A7AHC61)
+    //   pat1: 'H' 뒤에 영문+숫자 (예: AHC6)
+    //   pat2: 'H' 바로 뒤 숫자 (예: AH61)
+    //   pat3: 'GH' 감속기 패턴 (예: AGHD)
+    //   pat4: 'GEAR'/'REDUC' 키워드
+    const pcUpper = (partCode || '').toUpperCase();
+    const hasGearPartCodePattern = /[A-Z0-9]H[A-Z][0-9]/.test(pcUpper) ||     // AHC6 류
+                                     /[A-Z0-9]H[0-9]/.test(pcUpper) ||          // AH61 류
+                                     /[A-Z0-9]GH[A-Z0-9]/.test(pcUpper) ||      // GHD 류
+                                     pcUpper.includes('GEAR') ||
+                                     pcUpper.includes('REDUC');
+
+    const autoGearhead = scanOpts(['감속기', 'Gearhead', 'GEARHEAD', 'Reducer', 'REDUCER', 'HDS']) ||
+                          hasGDimPositive ||
+                          hasGDimKey ||
+                          hasGearPartCodePattern;
+
+    // ─── hasBrake 자동 판정 보강 (마찬가지) ───
+    const autoBrake = motorDim(dims, 'SL') > 0 ||
+                       scanOpts(['브레이크', 'Brake', 'BRAKE']);
+
+    return {
+        hasBrake:     optBrake     !== null ? optBrake     : autoBrake,
+        hasGearhead:  optGearhead  !== null ? optGearhead  : autoGearhead,
+        hasEncoder:   optEncoder   !== null ? optEncoder   : (motorDim(dims, 'EnH') > 0 ||
+                                                              motorDim(dims, 'EnL') > 0),
+        hasOilSeal:   optOilSeal   !== null ? optOilSeal   : (motorDim(dims, 'LB1') > 0 ||
+                                                              motorDim(dims, 'LE1') > 0),
+        hasConnector: optConnector !== null ? optConnector : (motorDim(dims, 'CW(MW)') > 0 ||
+                                                              motorDim(dims, 'CW') > 0),
+        bodyType:  (opts.bodyType  || 'Standard'),   // Standard, Servo, Stepper, BLDC, Gearhead, ...
+        shaftType: (opts.shaftType || 'Straight'),   // Straight, Keyway_WithKey, D_Cut_Single, ...
+        flangType: (opts.flangType || 'Round')       // Round, Square, FootMount, FaceMount
+    };
+}
+
 /** 라운드 사각형 Shape (Three.js Shape) */
 function makeRoundRectShape(w, h, rad, holeR=0) {
     const s = new THREE.Shape();
@@ -1336,13 +1808,32 @@ function buildServoMotor(dims) {
     // ══════════════════════════════════════════════════════════════════════
 
     // ─── 치수 (C++ 폴백 규칙 포함) ───
+    //   v50: hasBrake=true일 때 L1→LO1_LLO, L2→LO2, L3→LO3 으로 치환
+    //        (C++ CreateSquareFrameBody 동일 로직. 엑셀 정의:
+    //         LO1_LLO = 브레이크 부착 시 샤프트 제외 전체 길이,
+    //         LO2     = 브레이크 부착 시 샤프트 및 엔코더 제외 길이,
+    //         LO3     = 브레이크 부착 시 L1에서 EL을 뺀 거리)
     const LC   = motorDim(dims, 'LC',       40);
     const LH   = motorDim(dims, 'LH',       LC);
     const LR   = motorDim(dims, 'LR',       LC * 0.40);
-    const LX   = motorDim(dims, 'LX',       LC * 2.0);
-    const L1   = motorDim(dims, 'L1(LL)',   LX - LR);
-    const L2   = motorDim(dims, 'L2',       L1 * 0.55);
-    const L3   = motorDim(dims, 'L3',       L2 * 1.6);
+
+    // ★ v50: 모터 옵션 해석
+    const mOpt = resolveMotorOpts(dims, currentMotorOptions, currentPartCode);
+    const hasBrake = mOpt.hasBrake;
+    const hasGearhead = mOpt.hasGearhead;   // ★ v50-2세션차
+
+    // ★ v50: 브레이크 유무에 따라 치수 키 선택
+    const LX_raw   = motorDim(dims, 'LX',      0);
+    const LO_raw   = motorDim(dims, 'LO',      0);  // 브레이크 부착 시 전체길이
+    const LX       = hasBrake ? (LO_raw > 0 ? LO_raw : LX_raw || LC * 2.4) : (LX_raw || LC * 2.0);
+
+    const L1_key   = hasBrake ? 'LO1(LLO)' : 'L1(LL)';
+    const L2_key   = hasBrake ? 'LO2'      : 'L2';
+    const L3_key   = hasBrake ? 'LO3'      : 'L3';
+    const L1       = motorDim(dims, L1_key, LX - LR);
+    const L2       = motorDim(dims, L2_key, hasBrake ? L1 * 0.45 : L1 * 0.55);
+    const L3       = motorDim(dims, L3_key, L2 * 1.6);
+
     const S    = motorDim(dims, 'S',        LC * 0.20);
     const LB   = motorDim(dims, 'LB',       LC * 0.78);
     const LE   = motorDim(dims, 'LE',       LC * 0.10);
@@ -1357,29 +1848,127 @@ function buildServoMotor(dims) {
     const ES   = motorDim(dims, 'ES(MD)',   0);
     const tapDia = _parseTapSize(dims['M(LZ)'], 3);
 
+    // ★ v50: 브레이크 치수
+    //   SL    = LS모터 하단부 형상 치수 (C++ CreateBrakeSection에서 brakeLen으로 사용)
+    //   없으면 (L1 - L2 - EnL)로 추정 (C++ 폴백 동일)
+    const SL_raw = motorDim(dims, 'SL', 0);
+    const SL     = hasBrake ? (SL_raw > 0 ? SL_raw : Math.max(L1 - L2 - EnL, LC * 0.25)) : 0;
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ★ v50 2세션차: Gearhead 치수 매핑 (C++ CreateGearheadBodyPart/ShaftPart 기준)
+    // ═══════════════════════════════════════════════════════════════════════════
+    //   엑셀 정의 (부품별치수명정의한_문서.xlsx 참조):
+    //     G_LC  : 플랜지 외곽 폭 (정사각)
+    //     G_LG  : 플랜지 파트 두께
+    //     G_LA  : 체결 홀 PCD
+    //     G_LZ  : 체결 홀 직경
+    //     G_LB  : Pilot1 (인로우) 외경
+    //     G_LE  : Pilot1 두께
+    //     G_LD  : Pilot2 외경 (플랜지 뒤쪽 메인 하우징 원통부 외경과 동일 필드)
+    //     G_L3  : Pilot2 포함 총 단차 길이 (Pilot1 + Pilot2)
+    //     G_LL  : 브레이크 無 전체 바디 길이 (모터+감속기 바디부)
+    //     G_LLO : 브레이크 有 전체 바디 길이
+    //     G_LX  : 브레이크 無 감속기 포함 전체 길이 (샤프트 포함)
+    //     G_LO  : 브레이크 有 감속기 포함 전체 길이
+    //     G_LR  : 플랜지면 → 출력축 끝단 전체 축 돌출 길이
+    //     G_S   : 감속기 출력축 메인 직경
+    //     G_B   : 로드 회전부 이음 바깥 원크기 (G_S보다 큼)
+    //     G_C   : 로드 회전부 이음 원크기 (G_B와 비슷 또는 작음)
+    //     G_L1  : Pilot2 이후 ~ (G_B 단 끝) 길이
+    //     G_L2  : G_L1 이후 ~ (G_C 단 끝) 길이 — 샤프트 전체 돌출
+    //     G_L3  : (C++ 재사용) 감속기 출력축에서도 G_L3 쓰이나 GearheadBodyPart의 G_L3와 다름
+    //             ShaftPart에서 length1 = G_L1 - G_L3 계산에 쓰임
+    //     G_Q   : G_S 유효 돌출 길이
+    //     G_W / G_T / G_QK : 감속기 축 키홈 폭/두께/길이
+    //     G_TM / G_TapL : 감속기 축 끝단 탭 규격/깊이
+    // ═══════════════════════════════════════════════════════════════════════════
+    const G_LC = motorDim(dims, 'G_LC',  hasGearhead ? LC * 1.1 : 0);
+    const G_LG = motorDim(dims, 'G_LG',  hasGearhead ? LC * 0.15 : 0);
+    const G_LA = motorDim(dims, 'G_LA',  hasGearhead ? G_LC * 0.75 : 0);
+    const G_LZ = motorDim(dims, 'G_LZ',  hasGearhead ? G_LC * 0.10 : 0);
+    const G_LB = motorDim(dims, 'G_LB',  hasGearhead ? G_LC * 0.55 : 0);
+    const G_LE = motorDim(dims, 'G_LE',  hasGearhead ? LC * 0.10 : 0);
+    const G_LD = motorDim(dims, 'G_LD',  hasGearhead ? G_LC * 0.88 : 0);
+    const G_LL = motorDim(dims, 'G_LL',  0);
+    const G_LLO= motorDim(dims, 'G_LLO', 0);
+
+    // 감속기 출력축 치수
+    const G_S   = motorDim(dims, 'G_S',  hasGearhead ? S * 1.4 : 0);
+    const G_B   = motorDim(dims, 'G_B',  0);
+    const G_C   = motorDim(dims, 'G_C',  0);
+    const G_L1  = motorDim(dims, 'G_L1', hasGearhead ? LC * 0.40 : 0);
+    const G_L2  = motorDim(dims, 'G_L2', hasGearhead ? LC * 0.80 : 0);
+    const G_L3_shaft = motorDim(dims, 'G_L3_shaft', 0);   // ★ 이름 충돌 회피: ShaftPart에서 참조하는 G_L3
+    // 실제 C++은 같은 키 'G_L3'를 Body와 Shaft 양쪽에서 재사용 → dims['G_L3']로 접근
+    const G_L3  = motorDim(dims, 'G_L3', hasGearhead ? LC * 0.12 : 0);
+    const G_Q   = motorDim(dims, 'G_Q',  hasGearhead ? G_L2 * 0.65 : 0);
+    const G_W   = motorDim(dims, 'G_W',  0);
+    const G_T   = motorDim(dims, 'G_T',  G_W * 0.4);
+    const G_QK  = motorDim(dims, 'G_QK', 0);
+    const G_TapL = motorDim(dims, 'G_TapL', 0);
+
+    // Gearhead 바디 파생 치수 (C++ CreateGearheadBodyPart 기준)
+    //   L1_LL = 모터 본체 길이 (브레이크 없을 때 L1)
+    //   G_Length = G_LL - L1_LL = 감속기 바디+플랜지 전체 길이
+    //   bodyLen  = G_Length - G_LG = 순수 바디(원통) 길이
+    const L1_LL_for_gear = motorDim(dims, 'L1(LL)', 0) || L1;  // 모터 본체 길이 (브레이크 무관)
+    const G_LLeff = hasBrake ? (G_LLO > 0 ? G_LLO : G_LL) : G_LL;
+    let gearTotalLen = G_LLeff - L1_LL_for_gear;
+    // ★ v50 핫픽스: G_LL 누락 시 폴백을 HDS 감속기 실제 비율(약 LC*1.2)로 조정
+    //   (기존 LC*0.4는 너무 짧아서 감속기가 안 보이는 것처럼 보임)
+    if (!(gearTotalLen > 0)) {
+        gearTotalLen = LC * 1.2;
+        if (typeof logToCSharp === 'function') {
+            logToCSharp('[Gearhead fallback] G_LL missing, using LC*1.2=' + gearTotalLen.toFixed(1) +
+                        ' (partCode=' + (currentPartCode || '') + ')');
+        }
+    }
+    let gearBodyLen = gearTotalLen - G_LG;
+    if (!(gearBodyLen >= 0)) gearBodyLen = 0;
+
+    // Pilot 길이 (C++: pilot2Len = G_L3 - G_LE)
+    const pilot1Len = hasGearhead ? G_LE : 0;
+    const pilot2Len = hasGearhead ? Math.max(G_L3 - G_LE, 0) : 0;
+
     // 파생 치수
     const cornerR    = Math.max(LC * 0.04, 0.6);
     const endbellLen = L2 * 0.15;                    // Front Endbell (알루미늄)
     const statorLen  = L2 - endbellLen;              // Stator (강철)
     const statorIndent = Math.min(1.0, LC * 0.04);   // Stator는 Endbell보다 1mm 안쪽 (C++ 동일)
+    const brakeIndent  = Math.min(2.0, LC * 0.08);   // Brake는 본체보다 2mm 안쪽 (C++ CreateSquareFrameBody 동일)
 
     // ★ v48: 좌표계 뒤집음 — 샤프트 +Y, 엔코더 -Y
     // (v47은 샤프트 +Y=0~LR, 엔코더가 +Y 먼 곳에 있어서 카메라와 반대)
-    const shaftTipY  = LR;      // 샤프트 끝 (+Y 최대)
-    const flangeY    = 0;       // 플랜지 전면
-    const statorStartY = -endbellLen;
-    const encoderStartY = -L2;
-    const motorEndY  = -L1;     // 모터 뒤끝
+    //
+    // ★ v50: 브레이크 있을 때 Z축 배치
+    //   Y= +LR           : 샤프트 끝
+    //   Y=  0            : 플랜지 전면
+    //   Y= -endbellLen   : Stator 시작
+    //   Y= -L2           : Stator 끝 (= Brake 시작)
+    //   Y= -(L2+SL)      : Brake 끝 (= Encoder 시작)       [hasBrake=true일 때만]
+    //   Y= -L1           : 모터 뒤끝
+    //   ※ hasBrake=false일 때는 Y= -L2 에서 바로 Encoder 시작 (기존 동작 유지)
+    const shaftTipY     = LR;      // 샤프트 끝 (+Y 최대)
+    const flangeY       = 0;       // 플랜지 전면
+    const statorStartY  = -endbellLen;
+    const brakeStartY   = -L2;                       // ★ v50: 브레이크 시작 (hasBrake=true일 때만)
+    const encoderStartY = hasBrake ? -(L2 + SL) : -L2;
+    const motorEndY     = -L1;     // 모터 뒤끝
 
     // ─── 1. 샤프트 (Y=0 ~ +LR) ───
-    _buildShaftWithChamfer({
-        dia: S, length: LR, posY: shaftTipY, tipTowards: 'minus',
-        material: MAT.chrome()
-    });
+    //   ★ v50 2세션차: hasGearhead=true면 샤프트를 숨김
+    //   (C++ 어셈블리에서는 모터 축이 감속기 내부에 메이트로 결합되어 시각적으로 가려짐)
+    if (!hasGearhead) {
+        _buildShaftWithChamfer({
+            dia: S, length: LR, posY: shaftTipY, tipTowards: 'minus',
+            material: MAT.chrome()
+        });
+    }
 
     // ─── 2. 베어링 보스 (Y=0 ~ -LE, 원형 LB) ───
     // 플랜지 전면에서 샤프트 쪽으로 약간 돌출된 원형 보스
-    if (LB > 0 && LE > 0) {
+    //   ★ v50 2세션차: hasGearhead=true면 보스도 숨김 (Pilot1/Pilot2가 그 역할 대신)
+    if (LB > 0 && LE > 0 && !hasGearhead) {
         _buildCylinder({
             dia: LB, length: LE,
             posY: flangeY,    // 위로 LE만큼 (shaft 쪽)
@@ -1408,16 +1997,85 @@ function buildServoMotor(dims) {
         material: MAT.steelCast()
     });
 
-    // ─── 5. Encoder Cap (Y=-L2 ~ -L1, 검정) ───
+    // ─── ★ v50 NEW: 4-B. Brake Module + Brake Cover (hasBrake=true일 때만) ───
+    //   C++ CreateSquareFrameBody 3-1 / 3-2 단계 동일.
+    //   Stator 뒤쪽 [-L2 ~ -(L2+SL)] 구간에 배치.
+    //
+    //   Brake Module : 본체보다 2mm 안쪽 rounded box (아연도금 재질)
+    //   Brake Cover  : 프레임 외곽 크기, 중앙은 모듈과 같은 크기로 도넛형으로 속빔
+    //                  (알루미늄 재질 — 전면 브라켓과 동일)
+    if (hasBrake && SL > 0.01) {
+        const brakeW = LC - brakeIndent * 2;
+        const brakeH = LH - brakeIndent * 2;
+        const brakeCornerR = Math.max(cornerR - brakeIndent, 0.3);
+
+        // [Brake Module] 내부 블록 (본체보다 2mm 안쪽)
+        _buildRoundedBox({
+            w: brakeW, h: brakeH, depth: SL,
+            posY: brakeStartY - SL,   // -L2 - SL = -(L2+SL) = encoderStartY
+            cornerR: brakeCornerR,
+            holeR: S / 2 + 0.3,
+            material: MAT.steelDark()    // 강철-아연도금(C++ "Steel - Galvanized") 느낌
+        });
+
+        // [Brake Cover] 프레임 외곽 크기 + 내부 속빔 (도넛형)
+        //   C++ 구현: 외곽선(LC) + 내측선(Brake Module) 동시 스케치 후 Extrude
+        //   Three.js: rounded-rect shape에 홀을 rounded-rect 형태로 추가.
+        //             (makeRoundRectShape는 원형 홀만 지원하므로 별도 shape 필요)
+        {
+            const hw = LC / 2, hh = LH / 2;
+            const r  = Math.min(cornerR, hw * 0.5, hh * 0.5);
+            const coverShape = new THREE.Shape();
+            coverShape.moveTo(-hw + r, -hh);
+            coverShape.lineTo( hw - r, -hh); coverShape.quadraticCurveTo( hw, -hh,  hw, -hh + r);
+            coverShape.lineTo( hw,  hh - r); coverShape.quadraticCurveTo( hw,  hh,  hw - r,  hh);
+            coverShape.lineTo(-hw + r,  hh); coverShape.quadraticCurveTo(-hw,  hh, -hw,  hh - r);
+            coverShape.lineTo(-hw, -hh + r); coverShape.quadraticCurveTo(-hw, -hh, -hw + r, -hh);
+            coverShape.closePath();
+
+            // 내측 rounded-rect 홀 (brakeW × brakeH)
+            const ihw = brakeW / 2, ihh = brakeH / 2;
+            const ir  = Math.min(brakeCornerR, ihw * 0.5, ihh * 0.5);
+            const hole = new THREE.Path();
+            // 반시계 방향 (Shape의 홀은 반시계)
+            hole.moveTo(-ihw + ir, -ihh);
+            hole.lineTo(-ihw, -ihh + ir); hole.quadraticCurveTo(-ihw, -ihh, -ihw + ir, -ihh);   // 순서 조정
+            // 정확한 반시계 경로 — 단순 사각 근사 (rounded corner는 외곽과 동일 로직이라 괄호 혼동됨)
+            // 아래처럼 시계→반시계 반전으로 재작성:
+            const hole2 = new THREE.Path();
+            hole2.moveTo(-ihw + ir, -ihh);
+            hole2.quadraticCurveTo(-ihw, -ihh, -ihw, -ihh + ir);
+            hole2.lineTo(-ihw,  ihh - ir); hole2.quadraticCurveTo(-ihw,  ihh, -ihw + ir,  ihh);
+            hole2.lineTo( ihw - ir,  ihh); hole2.quadraticCurveTo( ihw,  ihh,  ihw,  ihh - ir);
+            hole2.lineTo( ihw, -ihh + ir); hole2.quadraticCurveTo( ihw, -ihh,  ihw - ir, -ihh);
+            hole2.lineTo(-ihw + ir, -ihh);
+            coverShape.holes.push(hole2);
+
+            const coverGeo = _extrudeShapeY(coverShape, SL);
+            const coverMesh = new THREE.Mesh(coverGeo, MAT.aluminum());
+            coverMesh.position.set(0, brakeStartY - SL, 0);   // Brake와 같은 구간
+            modelGroup.add(coverMesh);
+        }
+    }
+
+    // ─── 5. Encoder Cap (Y=-L2 ~ -L1, 검정  /  hasBrake시 Y=-(L2+SL) ~ -L1) ───
     {
         const encH = EnH > 0 ? EnH : LH;
         const encW = EnW > 0 ? EnW : LC;
         const encCornerR = Math.max(cornerR - 0.2, 0.3);
         const encCenterOffset = (encH - LH) / 2;  // 엔코더가 프레임보다 클 때 위로 오프셋
 
+        // ★ v50: hasBrake=true이면 Encoder 길이가 자동 계산됨
+        //   L1은 이미 LO1_LLO (Brake 포함 전체 길이) 값이므로
+        //   encoderStartY(=-(L2+SL)) 에서 motorEndY(=-L1)까지의 거리가 실제 EnL.
+        //   단, dims에 EnL이 명시돼 있으면 그 값을 우선 사용.
+        const actualEnL = EnL > 0
+            ? Math.min(EnL, Math.abs(motorEndY - encoderStartY))
+            : Math.abs(motorEndY - encoderStartY);
+
         _buildRoundedBox({
-            w: encW, h: encH, depth: EnL,
-            posY: encoderStartY - EnL,  // -L2 - EnL = -L1
+            w: encW, h: encH, depth: actualEnL,
+            posY: motorEndY,              // 모터 뒤끝부터 시작해서 +Y로 extrude
             cornerR: encCornerR,
             holeR: 0,  // 엔코더는 관통 없음
             material: MAT.plasticDark(),
@@ -1433,40 +2091,304 @@ function buildServoMotor(dims) {
         startAngle: Math.PI / 4
     });
 
-    // ─── 7. 엔코더 커넥터 + L자 케이블 ───
-    // 엔코더 상단(+Z 방향)에 커넥터 박스, 케이블이 위로 나와서 꺾여 내려감.
-    // 실제 CAD 이미지 2번과 일치하도록.
+    // ─── 7. 엔코더 커넥터 + L자 케이블 + IX40 플러그 ───
+    //   ★ v50 S4-Fix6: 실제 CAD 기준으로 배치 교정
+    //     [1] 케이블 인출부 (Cable Boss) — 엔코더 상단 "뒤쪽(-Y, 모터 뒤끝 쪽)"에 원통형 부트
+    //         재질: rubberBlack, 케이블이 여기서 위로 나와 +Y로 꺾임
+    //     [2] 신호 커넥터 소켓 (Connector Socket) — 엔코더 상단 "앞쪽(+Y, 샤프트 쪽)"에 사각 셸
+    //         전면(+Y 방향)에 어두운 개구부 + 4개 금색 핀 수평 돌출
+    //     [3] L자 케이블: [1] 위에서 +Z로 올라가 +Y로 꺾여 샤프트 쪽으로 진행
+    //                    (소켓 위로 지나감)
+    //     [4] 케이블 끝: IX40 표준 플러그
+    //
+    //   좌표계: Y축=모터 축방향(+Y 샤프트, -Y 엔코더), Z축=수직
+    //   엔코더 상단 Y 분할:
+    //     뒤쪽(-Y): 케이블 인출부 — Y = encMidY - EnL*0.27
+    //     앞쪽(+Y): 커넥터 소켓    — Y = encMidY + EnL*0.25
     if (CW > 0 && CH > 0 && CL > 0) {
         const encH = EnH > 0 ? EnH : LH;
         const encCenterOffset = (encH - LH) / 2;
-        const encMidY = encoderStartY - EnL / 2;   // 엔코더 중앙 Y
+        const encMidY = (encoderStartY + motorEndY) / 2;
         const encTopZ = encCenterOffset + encH / 2;  // 엔코더 상단 Z
 
-        // 커넥터 박스 (엔코더 위에 돌출)
-        // ES(MD) 오프셋 적용 가능 (0이면 중앙)
-        const connGeo = new THREE.BoxGeometry(CW, CH, CL);
-        const connMesh = new THREE.Mesh(connGeo, MAT.plasticBlack());
-        connMesh.position.set(ES, encMidY, encTopZ + CH / 2);
-        modelGroup.add(connMesh);
+        // ─────────────────────────────────────────────────────────────
+        // [1] 케이블 인출부 (Cable Boss) — 원통형 고무 부트
+        //     위치: 엔코더 상단 "뒤쪽(-Y)" ← 실제 CAD 이미지와 일치
+        //     형태: 하단 약간 두꺼운 어깨 + 상단 가는 원통
+        //     ★ S4-Fix11: 소형(EnL<18) 대응 — 인출부를 엔코더 상단의 주요 부품으로 크게
+        // ─────────────────────────────────────────────────────────────
+        const EnL_actual = Math.abs(encoderStartY - motorEndY);   // 엔코더 실제 Y 길이
+        // ★ 소형 판정: 본체 프레임 크기(LC)가 30mm 미만 — 15mm/25mm 모터 계열
+        //   (EnL 기준은 DB 값 편차로 신뢰 불가)
+        const isSmallEncoder = LC < 30;
 
-        // L자 케이블: 커넥터 상단에서 +Z로 짧게 → -Y로 길게 (샤프트 반대 방향)
-        const cableDia = Math.max(CH * 0.6, 1.5);
-        const cableLen1 = CH * 1.8;          // +Z 수직 구간
-        const cableLen2 = L2 * 0.6;          // -Y 수평 구간 (엔코더 뒤쪽)
+        const bossDia = isSmallEncoder
+            ? Math.min(CH * 0.95, EnL_actual * 0.50)               // 소형: 엔코더 뒤쪽에 적정 크기
+            : Math.min(CH * 0.70, EnL_actual * 0.40);              // 중형: 기존 유지
+        const bossShoulderH = CL * 0.18;
+        const bossTopH = CL * 0.22;
+        const bossX = 0;
+        const bossY = isSmallEncoder
+            ? encMidY - EnL_actual * 0.22                          // 소형: 엔코더 뒤쪽 22% 지점
+            : encMidY - EnL_actual * 0.27;                         // 중형: 기존 유지 (뒤쪽)
+
+        // 하단 어깨
+        const bossShoulderGeo = new THREE.CylinderGeometry(
+            bossDia / 2 * 1.15, bossDia / 2 * 1.15, bossShoulderH, 20
+        );
+        const bossShoulderMesh = new THREE.Mesh(bossShoulderGeo, MAT.rubberBlack());
+        bossShoulderMesh.position.set(bossX, bossY, encTopZ + bossShoulderH / 2);
+        modelGroup.add(bossShoulderMesh);
+
+        // 상단 원통
+        const bossTopGeo = new THREE.CylinderGeometry(
+            bossDia / 2, bossDia / 2, bossTopH, 20
+        );
+        const bossTopMesh = new THREE.Mesh(bossTopGeo, MAT.rubberBlack());
+        bossTopMesh.position.set(bossX, bossY, encTopZ + bossShoulderH + bossTopH / 2);
+        modelGroup.add(bossTopMesh);
+
+        const bossTopZ = encTopZ + bossShoulderH + bossTopH;
+
+        // ─────────────────────────────────────────────────────────────
+        // [2] 신호 커넥터 소켓 — 사각 셸 + 전면 개구부 + 4핀 수평 돌출
+        //     위치: 엔코더 상단 "앞쪽(+Y)" ← 실제 CAD 이미지와 일치
+        //     전면(개구부+핀): +Y 방향 (샤프트 쪽을 바라봄)
+        //     ★ S4-Fix11: 중형/소형 분기
+        //       - 중형(EnL>=18): 기존 Fix7 동작 (엔코더~본체 위 넓게 걸침)
+        //       - 소형(EnL<18):  엔코더 앞쪽의 작은 독립 블록 (인출부와 분리)
+        // ─────────────────────────────────────────────────────────────
+        const sockW = isSmallEncoder ? (CW * 0.85) : (CW * 1.00);
+        const sockD = isSmallEncoder
+            ? (EnL_actual * 0.55)                                   // 소형: 엔코더 절반 이상 (중간에서 시작)
+            : (EnL_actual * 0.95);                                  // 중형: 기존 유지
+        const sockH = isSmallEncoder
+            ? (CH * 0.65)                                            // 소형: 납작하게 (엔코더 위로 적게 솟음)
+            : (CH * 0.95);                                          // 중형: 기존 유지
+        const sockX = 0;
+        const sockY = isSmallEncoder
+            ? encMidY + EnL_actual * 0.375                          // 소형: 엔코더 중앙 앞 37.5% (엔코더 중간에서 시작, 본체 위 걸침)
+            : encMidY + EnL_actual * 0.52;                          // 중형: 기존 유지
+        // ★ 소켓 Z 위치:
+        //   - 중형: 엔코더 상단에 얹힘 (기존)
+        //   - 소형: 소켓 바닥이 본체 상단(LH/2)에 밀착 — 실제 CAD 15mm 기준
+        //     (소켓 상단은 엔코더 상단을 살짝 넘길 수 있음 = 자연스러운 형태)
+        const sockZ = isSmallEncoder
+            ? (LH / 2 + sockH / 2)                                  // 소형: 본체 상단에 소켓 바닥 밀착
+            : (encTopZ + sockH / 2);                                // 중형: 엔코더 상단 위
+
+        // 외곽 사각 셸
+        const sockGeo = new THREE.BoxGeometry(sockW, sockD, sockH);
+        const sockMesh = new THREE.Mesh(sockGeo, MAT.plasticBlack());
+        sockMesh.position.set(sockX, sockY, sockZ);
+        modelGroup.add(sockMesh);
+
+        // 전면 개구부 (+Y 방향 면)
+        const openingW = sockW * 0.8;
+        const openingH = sockH * 0.65;
+        const openingD = Math.min(1.8, sockD * 0.4);
+        const openingGeo = new THREE.BoxGeometry(openingW, openingD, openingH);
+        const openingMat = new THREE.MeshStandardMaterial({ color: 0x080808, metalness: 0.1, roughness: 0.95 });
+        const openingMesh = new THREE.Mesh(openingGeo, openingMat);
+        // 셸 전면(+Y)에서 살짝 안쪽으로 파묻힘
+        openingMesh.position.set(sockX, sockY + sockD / 2 - openingD / 2, sockZ);
+        modelGroup.add(openingMesh);
+
+        // 4개 금색 핀 — 개구부 안쪽에서 +Y 방향으로 수평 돌출
+        //   박스가 가로로 넓어졌으므로 핀 폭 배열도 넓게, 핀 길이도 돌출감 있게
+        const pinDia = Math.min(0.9, sockH * 0.20);
+        const pinLen = Math.min(2.0, sockD * 0.20);
+        const pinCount = 4;
+        const pinSpan = openingW * 0.70;
+        const pinStep = pinCount > 1 ? pinSpan / (pinCount - 1) : 0;
+        const pinStart = -pinSpan / 2;
+
+        // 핀 Y 위치: 셸 전면(+Y) 쪽 개구부에서 +Y로 살짝 노출
+        const pinFaceY = sockY + sockD / 2 - openingD + pinLen / 2;
+
+        for (let i = 0; i < pinCount; i++) {
+            const offX = pinStart + i * pinStep;
+            const pinGeo = new THREE.CylinderGeometry(pinDia / 2, pinDia / 2, pinLen, 8);
+            // Y축 기본이므로 회전 불필요
+            const pinMesh = new THREE.Mesh(pinGeo, MAT.brassGold());
+            pinMesh.position.set(sockX + offX, pinFaceY, sockZ);
+            modelGroup.add(pinMesh);
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // [3] L자 케이블: 인출부 상단 → +Z → -X (좌우 방향으로 꺾임)
+        //     ★ 실제 CAD: 케이블이 축방향이 아니라 "모터 측면"으로 꺾여 뻗음
+        //     Front 뷰에서 이미지의 좌우 방향(X축)으로 케이블이 진행
+        //     방향: -X (Front 뷰에서 이미지 오른쪽 → 실제 CAD 일치)
+        // ─────────────────────────────────────────────────────────────
+        const cableDia = Math.max(bossDia * 0.7, 1.8);
+        const cableLen1 = CH * 1.6;             // +Z 수직 구간 (짧게)
+        const cableLen2 = EnL_actual * 1.6;     // -X 좌우 구간 (모터 측면으로)
+
+        // ─────────────────────────────────────────────────────────────
+        // [4] 케이블 끝: IX40 플러그 (-X 방향 회전되어 붙음)
+        // ─────────────────────────────────────────────────────────────
+        const ix40Scale = Math.max(cableDia / 6.8, 0.75);
 
         _buildLCable({
-            start: new THREE.Vector3(ES, encMidY, encTopZ + CH),
+            start: new THREE.Vector3(bossX, bossY, bossTopZ + 0.1),
             dir1: '+z', len1: cableLen1,
-            dir2: '-y', len2: cableLen2,
+            dir2: '-x', len2: cableLen2,           // ★ +x → -x (실제 CAD 방향)
             dia: cableDia,
             endConnector: {
-                w: CW * 0.7, h: CH * 1.3, d: CL * 0.6,
-                material: MAT.plasticBlack()
+                type: 'IX40',
+                scale: ix40Scale
             }
         });
     }
 
-    // ─── 8. 치수선 ───
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ★ v50 2세션차 NEW: 9. Gearhead (감속기 일체형 파트) — hasGearhead=true일 때만
+    // ═══════════════════════════════════════════════════════════════════════════
+    //   C++ ExecuteGearheadAssembly: 모터 플랜지면(+Y=0)에 감속기 바디 후면을 메이트.
+    //   Three.js 좌표: 감속기 바디는 flangeY(=0)에서 +Y 방향으로 뻗어나감.
+    //
+    //   구조 (C++ CreateGearheadBodyPart 순서 그대로):
+    //     [1] Gearhead Body   : 사각 (G_LC×0.95), 길이 gearBodyLen      = Y ∈ [0, gearBodyLen]
+    //     [2] Gearhead Flange : 사각 G_LC, 두께 G_LG                    = Y ∈ [gearBodyLen, gearBodyLen+G_LG]
+    //     [3] Pilot 1 (인로우): 원형 G_LB, 두께 G_LE                    = Y ∈ [gearTotalLen, gearTotalLen+G_LE]
+    //     [4] Pilot 2 (인로우): 원형 G_LD, 길이 pilot2Len               = Y ∈ [gearTotalLen+G_LE, gearTotalLen+G_LE+pilot2Len]
+    //     [5] 마운팅 홀       : PCD G_LA, Ø G_LZ × 4개 (플랜지 컷)
+    //     [6] 출력축          : 다단 (G_B → G_C → G_S) revolve
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (hasGearhead) {
+        // ─── Gearhead 재질 프리셋 ───
+        const gearBodyMat   = MAT.steelCast();    // 감속기 하우징: 주철 질감
+        const gearFlangeMat = MAT.aluminum();     // 플랜지: 알루미늄
+        const gearPilotMat  = MAT.aluminum();     // Pilot: 알루미늄
+        const gearShaftMat  = MAT.chrome();       // 출력축: 크롬
+
+        // ─── [1] Gearhead Body (플랜지 뒤쪽 원통/사각 메인 하우징) ───
+        //   엑셀 정의: G_LD = 순수 원통부 외경
+        //   C++ 실제: CreateSketchRect(G_LC * 0.95, ...) → 사각 근사
+        //   → 원통 우선, G_LD가 없으면 사각 G_LC*0.95로 폴백 (C++ 호환)
+        let gearBodyEndY = flangeY;   // 현재 Gearhead 내 Y 커서
+        if (gearBodyLen > 0.01) {
+            if (G_LD > 0.01) {
+                // 원통 (엑셀 정의 기준 — 더 정확한 형상)
+                _buildCylinder({
+                    dia: G_LD, length: gearBodyLen,
+                    posY: gearBodyEndY,            // Y=0 ~ Y=gearBodyLen
+                    material: gearBodyMat
+                });
+            } else {
+                // 사각 폴백 (C++ 호환)
+                const gearBodySide = G_LC * 0.95;
+                const gearBodyCornerR = Math.max(cornerR, 0.6);
+                _buildRoundedBox({
+                    w: gearBodySide, h: gearBodySide, depth: gearBodyLen,
+                    posY: gearBodyEndY, cornerR: gearBodyCornerR, holeR: 0,
+                    material: gearBodyMat
+                });
+            }
+            gearBodyEndY += gearBodyLen;
+        }
+
+        // ─── [2] Gearhead Flange (사각 G_LC, 두께 G_LG) ───
+        if (G_LG > 0.01 && G_LC > 0.01) {
+            const flangeCornerR = Math.max(cornerR, 0.6);
+            _buildRoundedBox({
+                w: G_LC, h: G_LC, depth: G_LG,
+                posY: gearBodyEndY, cornerR: flangeCornerR,
+                holeR: 0,        // 마운팅 홀은 별도 처리 (아래 [5])
+                material: gearFlangeMat
+            });
+            gearBodyEndY += G_LG;   // 이제 gearBodyEndY = gearTotalLen = 플랜지 전면
+        }
+        const flangeFrontY = gearBodyEndY;    // 플랜지 전면 Y 좌표 (Pilot 시작)
+
+        // ─── [3] Pilot 1 (원형 G_LB × G_LE) ───
+        if (G_LB > 0.01 && pilot1Len > 0.01) {
+            _buildCylinder({
+                dia: G_LB, length: pilot1Len,
+                posY: gearBodyEndY,
+                material: gearPilotMat
+            });
+            gearBodyEndY += pilot1Len;
+        }
+
+        // ─── [4] Pilot 2 (원형 G_LD × pilot2Len) ───
+        //   C++ 실제: Pilot2 외경은 G_LD (Body와 동일 필드 재사용)
+        //   단, 바디가 이미 G_LD로 그려졌다면 Pilot2는 더 작은 축소 원통이어야 함.
+        //   엑셀 정의상 Pilot1/Pilot2 관계에서 Pilot2가 더 작음이 일반적이나,
+        //   C++ 구현이 G_LD를 재사용하므로 일단 C++ 동일 로직 유지.
+        if (G_LD > 0.01 && pilot2Len > 0.01) {
+            _buildCylinder({
+                dia: G_LD, length: pilot2Len,
+                posY: gearBodyEndY,
+                material: gearPilotMat
+            });
+            gearBodyEndY += pilot2Len;
+        }
+        const gearOutputY = gearBodyEndY;   // 감속기 출력면 (Gear-Output-Plane)
+
+        // ─── [5] 마운팅 홀 (플랜지 전면에 4개, 45°, G_LA PCD, Ø G_LZ) ───
+        //   C++: CreateWorkPlane(YZ, G_Length - G_LG)에서 Positive 방향 G_LG 깊이로 컷
+        //   Three.js: 홀은 실린더 메시를 얹어서 시각적으로 표시 (실제 boolean cut 없음)
+        if (G_LA > 0.01 && G_LZ > 0.01) {
+            _buildMountingHoles({
+                count: 4, pcd: G_LA, holeR: G_LZ / 2,
+                depth: G_LG * 1.05,                       // 플랜지를 관통하는 깊이
+                posY: flangeFrontY - G_LG,                // 플랜지 후면부터 시작
+                startAngle: Math.PI / 4                    // 45° (C++ halfP = PCD/2 × 0.707)
+            });
+        }
+
+        // ─── [6] 감속기 출력축 (G_S → G_B → G_C 다단 혹은 단순 G_S) ───
+        //   C++ CreateGearheadShaftPart 포팅:
+        //     length1 = G_B > 0 ? (G_L1 - G_L3) : 0   (G_B 구간)
+        //     length2 = G_C > 0 ? (G_L2 - G_Q) : 0    (G_C 구간)
+        //     mainShaftLen = G_C > 0 ? G_Q : G_L2      (G_S 구간 = 최상단)
+        //   Three.js: 복잡한 revolve 대신 실린더 3개를 쌓아서 근사
+        if (G_S > 0.01) {
+            const length1 = (G_B > 0.01) ? Math.max(G_L1 - G_L3, 0) : 0;
+            const length2 = (G_C > 0.01) ? Math.max(G_L2 - G_Q, 0) : 0;
+            const mainShaftLen = (G_C > 0.01) ? G_Q : G_L2;
+
+            let shaftCursor = gearOutputY;
+
+            // ① G_B 단 (로드 이음 바깥, 가장 굵음)
+            if (length1 > 0.01 && G_B > 0.01) {
+                _buildCylinder({
+                    dia: G_B, length: length1,
+                    posY: shaftCursor,
+                    material: gearShaftMat
+                });
+                shaftCursor += length1;
+            }
+
+            // ② G_C 단 (로드 이음, 중간 굵기)
+            if (length2 > 0.01 && G_C > 0.01) {
+                _buildCylinder({
+                    dia: G_C, length: length2,
+                    posY: shaftCursor,
+                    material: gearShaftMat
+                });
+                shaftCursor += length2;
+            }
+
+            // ③ G_S 단 (메인 출력축, 가장 앞쪽, 끝단 모따기 포함)
+            if (mainShaftLen > 0.01) {
+                _buildShaftWithChamfer({
+                    dia: G_S, length: mainShaftLen,
+                    posY: shaftCursor,              // 시작 Y
+                    tipTowards: 'plus',              // +Y 방향으로 뻗음 (끝단이 +Y쪽)
+                    material: gearShaftMat
+                });
+                shaftCursor += mainShaftLen;
+            }
+
+            // (키홈 G_W/G_T/G_QK, 축끝 탭 G_TM/G_TapL은 3D 프리뷰에서는
+            //  표현 생략 — 실제 CAD 작도에서만 수행)
+        }
+    }
+
+    // ─── 10. 치수선 ───
     if (options.dimensions) buildServoMotorDimOnly(dims);
 }
 
@@ -1484,9 +2406,28 @@ function buildServoMotorDimOnly(dims) {
     const LC  = motorDim(dims, 'LC',       40);
     const LH  = motorDim(dims, 'LH',       LC);
     const LR  = motorDim(dims, 'LR',       LC * 0.40);
-    const LX  = motorDim(dims, 'LX',       LC * 2.0);
-    const L1  = motorDim(dims, 'L1(LL)',   LX - LR);
-    const L2  = motorDim(dims, 'L2',       L1 * 0.55);
+
+    // ★ v50: Brake 분기 — buildServoMotor와 동일한 키 치환 규칙
+    const mOpt = resolveMotorOpts(dims, currentMotorOptions, currentPartCode);
+    const hasBrake = mOpt.hasBrake;
+    const hasGearhead = mOpt.hasGearhead;   // ★ v50-2세션차
+
+    const LX_raw   = motorDim(dims, 'LX',  0);
+    const LO_raw   = motorDim(dims, 'LO',  0);
+    const LX       = hasBrake ? (LO_raw > 0 ? LO_raw : LX_raw || LC * 2.4) : (LX_raw || LC * 2.0);
+
+    const L1_key   = hasBrake ? 'LO1(LLO)' : 'L1(LL)';
+    const L2_key   = hasBrake ? 'LO2'      : 'L2';
+    const L1       = motorDim(dims, L1_key, LX - LR);
+    const L2       = motorDim(dims, L2_key, hasBrake ? L1 * 0.45 : L1 * 0.55);
+    const L1_label = hasBrake ? 'LO1' : 'L1';
+    const L2_label = hasBrake ? 'LO2' : 'L2';
+    const LX_label = hasBrake ? 'LO'  : 'LX';
+
+    // ★ v50: SL (브레이크 길이) — 치수선에 별도 표시
+    const SL_raw = motorDim(dims, 'SL', 0);
+    const SL     = hasBrake ? (SL_raw > 0 ? SL_raw : Math.max(L1 - L2 - motorDim(dims, 'EnL', LC * 0.3), LC * 0.25)) : 0;
+
     const TL  = motorDim(dims, 'TL(LG)',   LC * 0.20);
     const LB  = motorDim(dims, 'LB',       LC * 0.78);
     const LE  = motorDim(dims, 'LE',       LC * 0.10);
@@ -1498,27 +2439,36 @@ function buildServoMotorDimOnly(dims) {
     const shaftTipY   = LR;
     const flangeY     = 0;
     const motorEndY   = -L1;
+    // ★ v50: Brake 시 엔코더 시작 Y
+    const encoderStartY = hasBrake ? -(L2 + SL) : -L2;
     const hw = LC / 2;
 
     // ─── 길이 치수 (Y축 방향) — -X 방향 4단계 오프셋으로 분산 ───
     // 각 레벨 사이 최소 hw*0.7 간격 확보
-    const xLevel1 = -(hw + LC * 0.6);   // 가장 가까운 레벨 (LR, L2 작은 것)
+    const xLevel1 = -(hw + LC * 0.6);   // 가장 가까운 레벨 (LR, L2/SL 작은 것)
     const xLevel2 = -(hw + LC * 1.2);   // 중간 (L1)
     const xLevel3 = -(hw + LC * 1.8);   // 먼 (LX 전체)
 
     // ① LR 샤프트 돌출 — 샤프트 쪽 +Y에만 있으므로 +X 쪽에 별도 배치 (안 겹침)
     addLengthDimY(hw + LC * 0.6, flangeY, shaftTipY, 'LR', LR);
 
-    // ② L2 플랜지 → 엔코더 시작 — 왼쪽 가장 가까운 레벨
+    // ② L2 (또는 LO2) 플랜지 → Stator 뒤끝 — 왼쪽 가장 가까운 레벨
     if (L2 > 1) {
-        addLengthDimY(xLevel1, -L2, flangeY, 'L2', L2);
+        addLengthDimY(xLevel1, -L2, flangeY, L2_label, L2);
     }
 
-    // ③ L1 본체 전체 — 왼쪽 중간 레벨
-    addLengthDimY(xLevel2, motorEndY, flangeY, 'L1', L1);
+    // ★ v50: ②-B. SL 브레이크 길이 — Stator 뒤끝 ~ Encoder 시작 구간
+    //   xLevel1보다 약간 바깥쪽(xLevel1.5)에 배치. hasBrake일 때만 표시.
+    if (hasBrake && SL > 1) {
+        const xLevelBrake = -(hw + LC * 0.9);
+        addLengthDimY(xLevelBrake, encoderStartY, -L2, 'SL', SL);
+    }
 
-    // ④ LX 전체 — 왼쪽 가장 먼 레벨 (가장 큰 치수)
-    addLengthDimY(xLevel3, motorEndY, shaftTipY, 'LX', LX);
+    // ③ L1 (또는 LO1) 본체 전체 — 왼쪽 중간 레벨
+    addLengthDimY(xLevel2, motorEndY, flangeY, L1_label, L1);
+
+    // ④ LX (또는 LO) 전체 — 왼쪽 가장 먼 레벨 (가장 큰 치수)
+    addLengthDimY(xLevel3, motorEndY, shaftTipY, LX_label, LX);
 
     // ─── 지름 치수 (축 단면 원형) — Y 위치로 분산 ───
     // 지름 치수들은 모두 X축 방향이지만 Y 위치를 **크게 다르게** 해서 겹침 방지
@@ -1538,9 +2488,308 @@ function buildServoMotorDimOnly(dims) {
     addWidthDimXY(-hw, hw, -L2 * 0.5, -hw * 2.0, 'LC', LC);
 
     // ⑨ EnH 엔코더 높이 — 본체보다 크면만 표시, 엔코더 중앙, -Z 더 뒤쪽
+    //   ★ v50: Brake 시 엔코더 실제 중앙으로 위치 조정
     if (EnH > LH + 1) {
-        addWidthDimXY(-EnH / 2, EnH / 2, -(L2 + EnL * 0.5), -hw * 2.8, 'EnH', EnH);
+        const encMidY = (encoderStartY + motorEndY) / 2;
+        addWidthDimXY(-EnH / 2, EnH / 2, encMidY, -hw * 2.8, 'EnH', EnH);
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ★ v50 2세션차 NEW: ⑩-⑭ Gearhead 치수선 (hasGearhead=true일 때만)
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (hasGearhead) {
+        // ─── Gearhead 치수 파싱 (buildServoMotor와 동일 폴백 규칙) ───
+        const G_LC_d = motorDim(dims, 'G_LC', LC * 1.1);
+        const G_LG_d = motorDim(dims, 'G_LG', LC * 0.15);
+        const G_LA_d = motorDim(dims, 'G_LA', G_LC_d * 0.75);
+        const G_LB_d = motorDim(dims, 'G_LB', G_LC_d * 0.55);
+        const G_LE_d = motorDim(dims, 'G_LE', LC * 0.10);
+        const G_LD_d = motorDim(dims, 'G_LD', G_LC_d * 0.88);
+        const G_LL_d = motorDim(dims, 'G_LL', 0);
+        const G_LLO_d= motorDim(dims, 'G_LLO', 0);
+        const G_LR_d = motorDim(dims, 'G_LR', 0);
+        const G_S_d  = motorDim(dims, 'G_S',  S * 1.4);
+        const G_L1_d = motorDim(dims, 'G_L1', LC * 0.40);
+        const G_L2_d = motorDim(dims, 'G_L2', LC * 0.80);
+        const G_L3_d = motorDim(dims, 'G_L3', LC * 0.12);
+
+        // Gearhead 축방향 Y 좌표 계산 (buildServoMotor와 동일)
+        const L1_LL_d = motorDim(dims, 'L1(LL)', 0) || L1;
+        const G_LLeff_d = hasBrake ? (G_LLO_d > 0 ? G_LLO_d : G_LL_d) : G_LL_d;
+        let gearTotalLen_d = G_LLeff_d - L1_LL_d;
+        if (!(gearTotalLen_d > 0)) gearTotalLen_d = LC * 0.4;
+        let gearBodyLen_d = gearTotalLen_d - G_LG_d;
+        if (!(gearBodyLen_d >= 0)) gearBodyLen_d = 0;
+        const pilot1Len_d = G_LE_d;
+        const pilot2Len_d = Math.max(G_L3_d - G_LE_d, 0);
+        const flangeFrontY_d = gearBodyLen_d + G_LG_d;        // = gearTotalLen_d
+        const gearOutputY_d  = flangeFrontY_d + pilot1Len_d + pilot2Len_d;
+        const gearShaftTipY_d = G_LR_d > 0
+            ? G_LR_d                                           // G_LR 명시 시 플랜지면 기준 절대 Y
+            : (gearOutputY_d + G_L2_d);                         // 폴백: 출력면 + G_L2
+
+        // ─── 길이 치수 (+X 방향에 별도 4단계 레벨로 배치) ───
+        //   기존 모터 본체 치수는 -X 쪽에 있으므로 Gearhead는 +X 쪽에 배치해서 겹침 방지
+        //   (LR 치수도 +X 쪽에 있어서 Y 위치로 분리)
+        const xGearLevel1 = hw + LC * 1.2;
+        const xGearLevel2 = hw + LC * 1.8;
+
+        // ⑩ G_LG 플랜지 두께 — 가장 가까운 레벨
+        if (G_LG_d > 1) {
+            addLengthDimY(xGearLevel1, gearBodyLen_d, flangeFrontY_d, 'G_LG', G_LG_d);
+        }
+
+        // ⑪ G_LE Pilot1 두께 — 플랜지 앞쪽
+        if (G_LE_d > 1 && pilot1Len_d > 1) {
+            addLengthDimY(xGearLevel1, flangeFrontY_d, flangeFrontY_d + pilot1Len_d, 'G_LE', G_LE_d);
+        }
+
+        // ⑫ G_LL (또는 G_LLO) 바디 전체 — 중간 레벨
+        if (G_LLeff_d > 1) {
+            const gll_label = hasBrake ? 'G_LLO' : 'G_LL';
+            // 모터 뒤끝(-L1) ~ 감속기 플랜지 전면
+            addLengthDimY(xGearLevel2, motorEndY, flangeFrontY_d, gll_label, G_LLeff_d);
+        }
+
+        // ⑬ G_LR 출력축 돌출 — 가장 먼 레벨, 플랜지 전면 ~ 축 끝
+        if (G_LR_d > 1) {
+            const xGearLevel3 = hw + LC * 2.4;
+            addLengthDimY(xGearLevel3, flangeFrontY_d, gearShaftTipY_d, 'G_LR', G_LR_d);
+        }
+
+        // ─── 지름 치수 (Y 위치 분산) ───
+        // ⑭ Ø G_S 출력축 직경 — 축 끝 근처, +Z 앞쪽
+        if (G_S_d > 0.5) {
+            addWidthDimXY(-G_S_d / 2, G_S_d / 2, gearShaftTipY_d + Math.max(G_LR_d * 0.1, 3), hw * 0.6,
+                          'Ø' + G_S_d.toFixed(1), G_S_d);
+        }
+
+        // ⑮ G_LB Pilot1 외경 — 플랜지 앞쪽 중간, +Z 더 멀리
+        if (G_LB_d > 0.5) {
+            addWidthDimXY(-G_LB_d / 2, G_LB_d / 2, flangeFrontY_d + pilot1Len_d * 0.5, hw * 1.6,
+                          'G_LB', G_LB_d);
+        }
+
+        // ⑯ G_LA 마운팅 PCD — 플랜지 중앙, +Z 더더 멀리
+        if (G_LA_d > 0.5) {
+            addWidthDimXY(-G_LA_d / 2, G_LA_d / 2, flangeFrontY_d - G_LG_d * 0.3, hw * 2.4,
+                          'G_LA', G_LA_d);
+        }
+
+        // ⑰ G_LC 플랜지 외곽 폭 — 플랜지 중앙, -Z 뒤쪽
+        if (G_LC_d > 0.5) {
+            addWidthDimXY(-G_LC_d / 2, G_LC_d / 2, flangeFrontY_d - G_LG_d * 0.5, -hw * 2.0,
+                          'G_LC', G_LC_d);
+        }
+
+        // ⑱ G_LD 바디/Pilot2 외경 — 바디 중앙, -Z 더 뒤쪽
+        if (G_LD_d > 0.5 && gearBodyLen_d > 1) {
+            addWidthDimXY(-G_LD_d / 2, G_LD_d / 2, gearBodyLen_d * 0.5, -hw * 2.6,
+                          'G_LD', G_LD_d);
+        }
+    }
+}
+
+
+// ═══════════════════════════════════════════════════
+// ⑬-B STEPPER_MOTOR — 스테핑 모터 (NEMA 계열) — v50 3세션차 신규
+// ═══════════════════════════════════════════════════
+/**
+ *  C++ MotorBodyType::Stepper 흐름 기반 단순화 구현.
+ *
+ *  Stepper는 Servo와 달리 엔코더/브레이크/감속기가 (기본적으로) 없고
+ *  NEMA 사각 프레임 + 짧은 샤프트 + 리드선(케이블 출구) 구조가 표준.
+ *  dims에 G_S / SL 등이 있으면 Servo 공통 분기(Brake/Gearhead)도 적용 가능하도록
+ *  옵션 기반 동작은 유지.
+ *
+ *  핵심 치수 (엑셀 참조):
+ *    LC, LH  : 프레임 폭/높이 (NEMA 프레임 사이즈 — 예: NEMA17=42mm)
+ *    LR      : 샤프트 돌출 길이
+ *    LX      : 전체 길이
+ *    L1(LL)  : 샤프트 제외 전체 바디 길이
+ *    S       : 샤프트 직경
+ *    PCD(LA) : 마운팅 홀 PCD
+ *    M(LZ)   : 탭 규격 (문자열)
+ *    TL(LG)  : 탭 깊이
+ *    MnL     : LS모터 하단부 형상 치수 (Stepper 리드선 박스 폭으로 대용)
+ *    EL      : 리드선 단자까지 거리 (케이블 시작 위치)
+ *
+ *  좌표계 (Three.js):
+ *    +Y : 샤프트 방향 (카메라 가까움)
+ *     0 : 플랜지 전면
+ *    -Y : 모터 뒤끝
+ */
+function buildStepperMotor(dims) {
+    // ─── 치수 ───
+    const LC = motorDim(dims, 'LC', 42);      // NEMA17 = 42mm 기본
+    const LH = motorDim(dims, 'LH', LC);
+    const LR = motorDim(dims, 'LR', LC * 0.56);
+    const LX = motorDim(dims, 'LX', LC * 1.0); // NEMA17/L = 40mm 정도
+    const L1 = motorDim(dims, 'L1(LL)', LX - LR);
+    const S  = motorDim(dims, 'S',  LC * 0.12);  // NEMA17 샤프트 = 5mm
+    const PCD = motorDim(dims, 'PCD(LA)', LC * 0.741);  // NEMA17 PCD = 31mm
+    const TL  = motorDim(dims, 'TL(LG)',  LC * 0.14);
+    const tapDia = _parseTapSize(dims['M(LZ)'], 3);      // M3 기본
+
+    // 리드선 박스 치수 (Servo의 CW/CL/CH 대신 Stepper는 MnL/EL/MWD 사용 가능)
+    const cableDia = Math.max(motorDim(dims, 'MWD', LC * 0.08), 2.5);
+    const cableLen = motorDim(dims, 'MnL', LC * 1.2);
+
+    // ─── 옵션 해석 (Stepper도 Brake/Gearhead 옵션 지원) ───
+    const mOpt = resolveMotorOpts(dims, currentMotorOptions, currentPartCode);
+    const hasBrake = mOpt.hasBrake;
+    const hasGearhead = mOpt.hasGearhead;
+
+    // Brake 치환 (Servo와 동일)
+    const LO_raw = motorDim(dims, 'LO', 0);
+    const LX_eff = hasBrake ? (LO_raw > 0 ? LO_raw : LX * 1.2) : LX;
+    const L1_key = hasBrake ? 'LO1(LLO)' : 'L1(LL)';
+    const L1_eff = motorDim(dims, L1_key, LX_eff - LR);
+    const SL = hasBrake ? motorDim(dims, 'SL', LC * 0.3) : 0;
+
+    // 파생
+    const cornerR = Math.max(LC * 0.04, 0.6);
+    const shaftTipY = LR;
+    const flangeY   = 0;
+    const motorEndY = -L1_eff;
+
+    // Stepper는 단일 바디 (Servo 3구간 분할 안 함)
+    // 엔드벨도 얇게, 바디는 거의 전체 길이 차지
+
+    // ─── 1. 샤프트 (hasGearhead=true면 숨김, Servo와 동일) ───
+    if (!hasGearhead) {
+        _buildShaftWithChamfer({
+            dia: S, length: LR, posY: shaftTipY, tipTowards: 'minus',
+            material: MAT.chrome()
+        });
+    }
+
+    // ─── 2. 플랜지면 얇은 엔드벨 (알루미늄, 약 LC*0.10) ───
+    const endbellLen = Math.min(LC * 0.10, L1_eff * 0.2);
+    _buildRoundedBox({
+        w: LC, h: LH, depth: endbellLen,
+        posY: flangeY - endbellLen,
+        cornerR, holeR: S / 2 + 0.3,
+        material: MAT.aluminum()
+    });
+
+    // ─── 3. Stepper Body — 메인 스테이터 (Servo보다 단순하게 단일 블록) ───
+    //   Brake 없을 때: [-endbellLen ~ -L1]
+    //   Brake 있을 때: [-endbellLen ~ -L1-SL] (뒤로 SL 길이만큼 더 확장)
+    const bodyStartY = -endbellLen;
+    const bodyEndY   = hasBrake ? -(L1_eff - SL) : motorEndY;
+    const bodyLen = bodyStartY - bodyEndY;
+    const statorIndent = Math.min(1.0, LC * 0.04);
+
+    _buildRoundedBox({
+        w: LC - statorIndent * 2, h: LH - statorIndent * 2,
+        depth: bodyLen,
+        posY: bodyEndY,
+        cornerR: Math.max(cornerR - statorIndent, 0.3),
+        holeR: S / 2 + 0.3,
+        material: MAT.steelCast()
+    });
+
+    // ─── 3-B. Brake Module (hasBrake=true일 때만) ───
+    if (hasBrake && SL > 0.01) {
+        const brakeIndent = Math.min(2.0, LC * 0.08);
+        _buildRoundedBox({
+            w: LC - brakeIndent * 2, h: LH - brakeIndent * 2,
+            depth: SL,
+            posY: motorEndY,               // 모터 뒤끝에서 시작
+            cornerR: Math.max(cornerR - brakeIndent, 0.3),
+            holeR: S / 2 + 0.3,
+            material: MAT.steelDark()
+        });
+    }
+
+    // ─── 4. 마운팅 홀 (플랜지 전면 4개) ───
+    _buildMountingHoles({
+        count: 4, pcd: PCD, holeR: tapDia / 2,
+        depth: TL + endbellLen,
+        posY: flangeY - (TL + endbellLen),
+        startAngle: Math.PI / 4
+    });
+
+    // ─── 5. 리드선 출구 (-Y 쪽 끝에서 케이블이 뻗어나옴) ───
+    //   Stepper는 커넥터 박스 대신 모터 뒤쪽에서 리드선(검정 고무)이 직접 나오는 것이 보통.
+    //   케이블이 모터 후면 중앙에서 -Y 방향으로 뻗다가 꺾여 -Z로 내려감.
+    if (cableDia > 0.5 && cableLen > 0.5) {
+        const cableStartY = hasBrake ? (motorEndY - SL - 0.1) : (motorEndY - 0.1);
+        _buildLCable({
+            start: new THREE.Vector3(0, cableStartY, 0),
+            dir1: '-y', len1: cableLen * 0.3,
+            dir2: '-z', len2: cableLen * 0.7,
+            dia: cableDia,
+            endConnector: null   // 리드선은 끝 커넥터 없음 (열린 선)
+        });
+    }
+
+    // ─── 6. Gearhead (hasGearhead=true일 때) ───
+    //   Stepper + Gearhead 조합도 실제 제품에 존재(예: 감속 스텝모터).
+    //   Servo와 동일한 방식으로 buildServoMotor의 Gearhead 로직을 재사용하고 싶지만,
+    //   현재 설계상 별도 함수이므로 간단한 안내 주석만 남김.
+    //   (향후 common helper로 분리하면 공유 가능)
+    //   → 실무에서는 dims에 G_* 없는 경우가 대다수이므로 생략.
+
+    // ─── 7. 치수선 ───
+    if (options.dimensions) buildStepperMotorDimOnly(dims);
+}
+
+/**
+ * Stepper 치수선 (buildServoMotorDimOnly 단순화 버전)
+ */
+function buildStepperMotorDimOnly(dims) {
+    const LC = motorDim(dims, 'LC', 42);
+    const LH = motorDim(dims, 'LH', LC);
+    const LR = motorDim(dims, 'LR', LC * 0.56);
+
+    const mOpt = resolveMotorOpts(dims, currentMotorOptions, currentPartCode);
+    const hasBrake = mOpt.hasBrake;
+
+    const LO_raw = motorDim(dims, 'LO', 0);
+    const LX_raw = motorDim(dims, 'LX', 0);
+    const LX = hasBrake ? (LO_raw > 0 ? LO_raw : LX_raw || LC * 1.2) : (LX_raw || LC * 1.0);
+    const L1_key = hasBrake ? 'LO1(LLO)' : 'L1(LL)';
+    const L1 = motorDim(dims, L1_key, LX - LR);
+    const L1_label = hasBrake ? 'LO1' : 'L1';
+    const LX_label = hasBrake ? 'LO'  : 'LX';
+
+    const SL = hasBrake ? motorDim(dims, 'SL', LC * 0.3) : 0;
+
+    const S  = motorDim(dims, 'S',  LC * 0.12);
+    const PCD = motorDim(dims, 'PCD(LA)', LC * 0.741);
+
+    const shaftTipY = LR;
+    const flangeY   = 0;
+    const motorEndY = -L1;
+    const hw = LC / 2;
+
+    const xLevel1 = -(hw + LC * 0.6);
+    const xLevel2 = -(hw + LC * 1.2);
+
+    // LR 샤프트 돌출
+    addLengthDimY(hw + LC * 0.6, flangeY, shaftTipY, 'LR', LR);
+
+    // SL 브레이크 (hasBrake일 때만)
+    if (hasBrake && SL > 1) {
+        addLengthDimY(-(hw + LC * 0.9), motorEndY, motorEndY + SL, 'SL', SL);
+    }
+
+    // L1/LO1 본체
+    addLengthDimY(xLevel1, motorEndY, flangeY, L1_label, L1);
+
+    // LX/LO 전체
+    addLengthDimY(xLevel2, motorEndY, shaftTipY, LX_label, LX);
+
+    // Ø S
+    addWidthDimXY(-S / 2, S / 2, shaftTipY + LR * 0.3, hw * 0.6, 'Ø' + S.toFixed(1), S);
+
+    // PCD
+    addWidthDimXY(-PCD / 2, PCD / 2, flangeY - L1 * 0.2, hw * 2.0, 'PCD', PCD);
+
+    // LC 프레임 폭
+    addWidthDimXY(-hw, hw, -L1 * 0.5, -hw * 2.0, 'LC', LC);
 }
 
 
@@ -1654,12 +2903,20 @@ function buildDGBBDimOnly(dims) {
     const outerR = D / 2;
     const halfB  = B / 2;
 
+    // ★ 치수선 오프셋을 베어링 크기 비례로 계산 (작은 베어링 대응)
+    //   기존: 고정 8mm/10mm → 작은 베어링(예: D=9)에서는 치수가 너무 멀리 배치되어
+    //        모델이 작게 보임. 외경 D 기준 12% 정도가 시각적으로 적절.
+    //   최소값은 유지하여 매우 작은 베어링에서도 치수선이 모델과 겹치지 않도록.
+    const axOff  = Math.max(D * 0.12, 3);    // 축방향 오프셋 (d,D 치수의 z 위치)
+    const lblOff = Math.max(D * 0.15, 4);    // 라벨 오프셋 (d,D 라벨의 x 방향)
+    const bOff   = Math.max(D * 0.15, 4);    // B 치수의 x 오프셋
+
     // d (내경) — 좌측
-    addHorizontalDim(-innerR, innerR, -halfB - 8, -innerR - 10, 'd', d);
-    // D (외경) — 우측  
-    addHorizontalDim(-outerR, outerR, halfB + 8, outerR + 10, 'D', D);
+    addHorizontalDim(-innerR, innerR, -halfB - axOff, -innerR - lblOff, 'd', d);
+    // D (외경) — 우측
+    addHorizontalDim(-outerR, outerR, halfB + axOff, outerR + lblOff, 'D', D);
     // B (폭) — 상단
-    addVerticalDim(outerR + 10, -halfB, halfB, 'B', B);
+    addVerticalDim(outerR + bOff, -halfB, halfB, 'B', B);
 }
 
 // ═══════════════════════════════════════════════════
@@ -3370,11 +4627,20 @@ function fitCameraToModel() {
     if (linkedGroup && linkedGroup.children.length > 0) {
         box.expandByObject(linkedGroup);
     }
+    // ★ 치수선 그룹도 바운딩박스에 포함 (치수가 표시되면 그것까지 화면에 보이도록 줌 레벨 조정)
+    //   포함 안 하면 카메라는 모델만 기준으로 피팅하고, 치수선은 카메라 시야 밖으로 나가
+    //   사용자가 수동으로 줌아웃해야 치수가 보이는 현상 발생.
+    //   포함하면 초기부터 모델+치수 전체가 화면에 들어옴.
+    //   단, dimGroup 이 비어있거나 visible=false 면 영향 없음.
+    if (dimGroup && dimGroup.visible && dimGroup.children.length > 0) {
+        box.expandByObject(dimGroup);
+    }
     const ctr = box.getCenter(new THREE.Vector3());
     const sz  = box.getSize(new THREE.Vector3());
     const mx  = Math.max(sz.x, sz.y, sz.z);
     controls.target.copy(ctr);
-    camera.position.set(ctr.x + mx * 1.8, ctr.y + mx * 1.5, ctr.z + mx * 1.0);
+    // 카메라 거리 배수 조정: 기존 1.8 → 1.4 (dimGroup 포함으로 바운딩박스가 커졌으므로 배수를 줄여 시각적 크기 유지)
+    camera.position.set(ctr.x + mx * 1.4, ctr.y + mx * 1.2, ctr.z + mx * 0.8);
     controls.update();
 }
 
@@ -3485,7 +4751,133 @@ function addArrow3D(o, d, l) {
     dimGroup.add(new THREE.ArrowHelper(d, o, l, 0xFFC832, l * 0.6, l * 0.4));
 }
 
+// ═══════════════════════════════════════════════
+// ★ 표시용 실제 DB 변수명 복원
+//   JS 렌더러 내부에서는 편의상 축약형(d, D, L, K)을 쓰지만,
+//   화면(3D 라벨 + 패널)에는 DB의 실제 변수명(d1, D1, L1)을 표시해야
+//   추후 DB 문서 검수 시 혼동이 없음.
+//   currentDimMeta에 실제 DB 변수명이 키로 저장되어 있으므로 이를 근거로 복원.
+// ═══════════════════════════════════════════════
+
+/**
+ * 단순화된 축약형(d, D 등)을 currentDimMeta 의 실제 DB 변수명으로 복원.
+ * 복합 치수(L+K)는 각 항을 재귀 복원 후 연산자로 재조합.
+ * 매칭 실패 시 원본을 그대로 반환 (안전한 fallback).
+ *
+ * 예시 (DB에 d1, D1, L, K, B 가 있을 때):
+ *   'd'    → 'd1'
+ *   'D'    → 'D1'
+ *   'B'    → 'B'     (직접 매칭)
+ *   'L+K'  → 'L+K'   (L과 K 모두 DB에 있으므로 복합명 그대로)
+ *   'd+B'  → 'd1+B'  (d는 d1로, B는 그대로)
+ *   'Xyz'  → 'Xyz'   (매칭 없음 → 원본 유지)
+ */
+/**
+ * 단순화된 축약형(d, D, K, S 등)을 currentDimMeta 의 실제 DB 변수명으로 복원.
+ *
+ * 매칭 전략 (우선순위 순):
+ *   (1) 직접 매칭 — currentDimMeta[name] 존재
+ *   (2) 대문자 매칭 — currentDimMeta[name.toUpperCase()] 존재
+ *   (3) ★ 값 기반 별칭 매칭 — currentDimensions 를 순회하며 동일 값을 가진 다른 키 중
+ *       currentDimMeta 에도 존재하는 것을 찾음.
+ *       예) C# 이 { K:13, k:13, H:13 } 을 함께 전송하고 dimMeta 에는 H 만 있을 때
+ *           addDimLabel('K', 13) → H 로 복원됨 → 3D 라벨 "H=13.0"
+ *       여러 후보가 있으면 다음 기준으로 우선순위 결정:
+ *         a. 괄호/부등호 등 특수문자 포함 = 더 구체적 (B1(일반), P1(UNC) 등)
+ *         b. 원본 name 과 동일
+ *         c. 더 긴 이름 = 더 구체적
+ *   (4) 숫자 접미사 fallback — d → d1, L → L1 ...
+ *   (5) 복합 치수 (L+K 등) — 각 항을 재귀 복원 후 재조합
+ *   (6) 매칭 실패 → 원본 그대로 (부품에 DB 매핑 없는 경우 대비)
+ *
+ * @param {string} name  렌더러가 사용한 축약형 변수명 (예: 'K', 'S', 'L+K')
+ * @param {number} value 렌더링 중인 치수값 (값 기반 별칭 매칭에 사용)
+ */
+function resolveActualDbKey(name, value) {
+    if (!name) return name;
+
+    // (5) 복합 치수 — 연산자 기준 분해 후 각 항 재귀 복원
+    if (/[+\-*/]/.test(name)) {
+        let cleaned = name.trim();
+        const wrapped = cleaned.startsWith('(') && cleaned.endsWith(')');
+        if (wrapped) cleaned = cleaned.substring(1, cleaned.length - 1);
+
+        const tokens = cleaned.split(/([+\-*/])/);
+        const resolvedTokens = tokens.map(t => {
+            const trimmed = t.trim();
+            if (trimmed === '' || /^[+\-*/]$/.test(trimmed)) return trimmed;
+            // 복합의 각 항은 개별 값을 currentDimensions에서 조회해서 전달
+            const partValue = (currentDimensions && typeof currentDimensions[trimmed] === 'number')
+                ? currentDimensions[trimmed]
+                : undefined;
+            return resolveActualDbKey(trimmed, partValue);
+        });
+        const combined = resolvedTokens.join('');
+        return wrapped ? '(' + combined + ')' : combined;
+    }
+
+    // 단일 치수 — 후보 수집
+    const candidates = new Set();
+    const upper = name.toUpperCase();
+
+    // (1)(2) 직접/대문자 매칭
+    if (currentDimMeta[name]) candidates.add(name);
+    if (upper !== name && currentDimMeta[upper]) candidates.add(upper);
+
+    // (3) 값 기반 별칭 매칭
+    //     currentDimensions 순회 → 값이 일치하며 currentDimMeta 에 존재하는 키 수집
+    //     부동소수 비교 허용오차 1e-6 (치수는 mm 단위, 0.001 차이는 같은 값으로 간주)
+    if (typeof value === 'number' && !isNaN(value) && currentDimensions) {
+        for (const key of Object.keys(currentDimensions)) {
+            const v = currentDimensions[key];
+            if (typeof v === 'number' && Math.abs(v - value) < 1e-6 && currentDimMeta[key]) {
+                candidates.add(key);
+            }
+        }
+    }
+
+    if (candidates.size > 0) {
+        // 우선순위 정렬
+        const sorted = [...candidates].sort((a, b) => {
+            // a. 특수문자 (괄호·부등호 등) 포함 시 우선 — 더 구체적인 이름
+            const aSpec = /[()<>=]/.test(a);
+            const bSpec = /[()<>=]/.test(b);
+            if (aSpec !== bSpec) return aSpec ? -1 : 1;
+            // b. 원본 name 과 정확히 일치하면 우선
+            if (a === name && b !== name) return -1;
+            if (b === name && a !== name) return 1;
+            // c. 원본의 대문자 버전이면 차순위
+            if (a === upper && b !== upper) return -1;
+            if (b === upper && a !== upper) return 1;
+            // d. 더 긴 이름이 더 구체적
+            if (a.length !== b.length) return b.length - a.length;
+            // e. 알파벳 순 (안정성)
+            return a.localeCompare(b);
+        });
+        return sorted[0];
+    }
+
+    // (4) 숫자 접미사 fallback — 값 기반 매칭도 실패했을 때의 최후 안전망
+    for (let i = 1; i <= 9; i++) {
+        if (currentDimMeta[name + i]) return name + i;
+        if (upper !== name && currentDimMeta[upper + i]) return upper + i;
+    }
+
+    // (6) 모든 fallback 실패 → 원본 그대로
+    return name;
+}
+
 function addDimLabel(x, y, z, name, val) {
+    // ★ 표시용 DB 변수명으로 복원 (내부 name 은 'K'지만 DB 는 'H' 인 경우 등)
+    //   값 기반 별칭 매칭을 위해 val 도 전달
+    //   이 이름이 3D 라벨 + 치수 참조 패널 모두에 사용되어 DB와 일관성 유지
+    const displayName = resolveActualDbKey(name, val);
+
+    // ★ 렌더링된 치수 수집 (치수 참조 패널용) — 복원된 DB 변수명으로 저장
+    //   동일 name 중복 시에도 모두 추가 (여러 위치에 같은 치수가 표시될 수 있음)
+    //   updateDimPanel() 에서 중복 제거 후 표시
+    renderedDimensions.push({ name: displayName, value: val });
+
     const div = document.createElement('div');
     div.className = 'dim-label';
     // ★ 굵고 진한 텍스트 스타일 적용
@@ -3494,10 +4886,211 @@ function addDimLabel(x, y, z, name, val) {
     div.style.color = '#1F2937';
     div.style.textShadow = '0 0 3px rgba(255,255,255,0.8)';
     div.style.fontFamily = 'Arial, sans-serif';
-    div.innerHTML = '<span class="dim-label-name">' + name + '=</span><span class="dim-label-value">' + val.toFixed(1) + '</span>';
+    div.innerHTML = '<span class="dim-label-name">' + displayName + '=</span><span class="dim-label-value">' + val.toFixed(1) + '</span>';
     const lbl = new CSS2DObject(div);
     lbl.position.set(x, y, z);
     dimGroup.add(lbl);
+}
+
+// ═══════════════════════════════════════════════
+// ★ 치수 참조 패널 (약어 ↔ 전체명) — 렌더링된 치수만 표시
+// ═══════════════════════════════════════════════
+
+/**
+ * 치수명 약어 정규화 — 패널/매핑 조회 시 키 통일용
+ *   예) "Ø4.0" → "Ø4.0" (그대로)
+ *       "PCD(LA)" → "PCD" (괄호 이후 제거) — 단, 매핑에 원본 키가 있으면 우선 사용
+ */
+function normalizeDimName(name) {
+    if (!name) return '';
+    return String(name).trim();
+}
+
+/**
+ * 전체 치수명(표시명) 조회 — DB 변수명 → 전체 한글명
+ *
+ * ★ 이 함수는 renderedDimensions 에 저장된 "이미 복원된 DB 변수명"을
+ *   전체 한글 치수명으로 변환하는 역할만 담당합니다.
+ *   변수명 복원(축약형 → DB 변수명)은 addDimLabel의 resolveActualDbKey 가 먼저 처리.
+ *
+ * 단계별 동작:
+ *   1) currentDimMeta 직접 매칭 (정상 경로) — 대부분 이 단계에서 해결
+ *   2) 대문자 매칭 (case sensitivity 차이 대비)
+ *   3) 괄호 이후 잘라낸 버전 (예: "PCD(LA)" → "PCD")
+ *   4) 숫자 접미사 fallback — resolveActualDbKey 가 실패했을 때를 위한
+ *       2차 안전망 (addDimLabel 단계에서 DB 매핑이 아예 없어 복원 못한 경우)
+ *   5) 복합 치수 처리 — addDimLabel 의 resolveActualDbKey 가 이미 각 항을
+ *       DB 변수명으로 복원했으므로, 여기서는 각 항의 전체 한글명으로 재조합
+ *       예: "(L+K)" → "(나사부 길이 + 머리 높이)"
+ *   6) 없으면 약어 자체 반환 (패널에서 "—" 로 표시)
+ */
+function resolveDimDisplayName(abbr) {
+    if (!abbr) return '';
+
+    // 1. 정확한 매칭
+    if (currentDimMeta[abbr]) return currentDimMeta[abbr];
+
+    // 2. 대문자 매칭
+    const uK = abbr.toUpperCase();
+    if (currentDimMeta[uK]) return currentDimMeta[uK];
+
+    // 3. 괄호 제거 후 재시도 (예: "PCD(LA)" → "PCD")
+    const idxParen = abbr.indexOf('(');
+    if (idxParen > 0) {
+        const head = abbr.substring(0, idxParen).trim();
+        if (currentDimMeta[head]) return currentDimMeta[head];
+        const headU = head.toUpperCase();
+        if (currentDimMeta[headU]) return currentDimMeta[headU];
+    }
+
+    // 4. 숫자 접미사 fallback (2차 안전망 — resolveActualDbKey 가 놓친 경우)
+    for (let i = 1; i <= 9; i++) {
+        const trySfx = abbr + i;
+        if (currentDimMeta[trySfx]) return currentDimMeta[trySfx];
+        const trySfxU = uK + i;
+        if (currentDimMeta[trySfxU]) return currentDimMeta[trySfxU];
+    }
+
+    // 5. 복합 치수명 처리 — 연산자 기준 분리 후 각 항을 전체 한글명으로 조합
+    //    예: "L+K" → "(나사부 길이 + 머리 높이)"
+    //        "L1+K" → "(나사부 길이 + 머리 높이)" (resolveActualDbKey 거친 경우)
+    if (/[+\-*/]/.test(abbr)) {
+        let cleaned = abbr.trim();
+        if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
+            cleaned = cleaned.substring(1, cleaned.length - 1);
+        }
+        const tokens = cleaned.split(/([+\-*/])/);
+        let anyMapped = false;
+        const resolvedTokens = tokens.map(t => {
+            const trimmed = t.trim();
+            if (trimmed === '') return '';
+            if (/^[+\-*/]$/.test(trimmed)) return ' ' + trimmed + ' ';
+            const sub = resolveDimDisplayName(trimmed);
+            if (sub !== trimmed) anyMapped = true;
+            return sub;
+        });
+        if (anyMapped) return '(' + resolvedTokens.join('').trim() + ')';
+    }
+
+    return abbr;  // 매핑 없음 → 약어 그대로 (패널에서 "—" 표시)
+}
+
+/**
+ * C# 에서 전달된 dimMeta payload 적용.
+ *
+ * 특수 키(__panel_title, __panel_empty, __panel_no_mapping, __panel_count_unit)는
+ * 패널 UI 텍스트(번역됨)이므로 currentPanelText 에 저장하고 currentDimMeta 에는 넣지 않음.
+ * 일반 키(L, D1, H 등)만 currentDimMeta 에 등록되어 치수 매핑 조회에 사용.
+ */
+function applyDimMetaPayload(payload) {
+    currentDimMeta = {};
+    // 기존 UI 텍스트 유지 (payload 에 특수 키가 없으면 이전 값 유지)
+    // C# 이 정상 전송하면 전부 교체됨
+    for (const [key, val] of Object.entries(payload)) {
+        if (!key) continue;
+        const strVal = val == null ? '' : String(val);
+
+        // 특수 키 (패널 UI 텍스트) → currentPanelText 에 저장, 치수 매핑엔 제외
+        if (key === '__panel_title')        { currentPanelText.title     = strVal; continue; }
+        if (key === '__panel_empty')        { currentPanelText.empty     = strVal; continue; }
+        if (key === '__panel_no_mapping')   { currentPanelText.noMapping = strVal; continue; }
+        if (key === '__panel_count_unit')   { currentPanelText.countUnit = strVal; continue; }
+
+        // ★ 중요: 자동 대문자 엔트리 생성 금지
+        //   과거에 currentDimMeta[key.toUpperCase()] 도 자동 추가했으나, 이로 인해
+        //   DB에 없는 키(예: "K")가 "가짜 매핑"으로 등록되어 resolveActualDbKey 의
+        //   값 기반 별칭 매칭에서 잘못된 후보(K)가 선택되는 버그 발생.
+        //   실제 사례: dimMeta={"H":"육각머리높이/...", "k":"머리높이"} 전달 시,
+        //             자동 K 추가 → 렌더러의 'K' 라벨이 H 대신 K(머리높이)로 표시됨.
+        //   해결: DB/fallback 원본 키 그대로만 저장. 대소문자 차이는 resolveActualDbKey
+        //         단계 (2) 에서 upper 변환으로 별도 처리됨.
+        currentDimMeta[key] = strVal;
+    }
+}
+
+/**
+ * 치수 참조 패널 업데이트
+ *   - options.dimPanel === false 이면 숨김
+ *   - renderedDimensions의 중복 제거 후 표 렌더
+ *   - dim-panel-row 호버 시 해당 3D 라벨이 강조됨 (시각적 힌트)
+ */
+function updateDimPanel() {
+    const panel = document.getElementById('dim-panel');
+    if (!panel) return;
+
+    if (!options.dimPanel) {
+        panel.style.display = 'none';
+        return;
+    }
+
+    // ★ 다국어: 패널 헤더 타이틀도 현재 언어로 갱신
+    const titleEl = panel.querySelector('.dim-panel-title');
+    if (titleEl) titleEl.textContent = currentPanelText.title;
+
+    // 중복 제거 — 같은 name이 여러 번 푸시된 경우 첫 값 유지
+    const seen = new Set();
+    const unique = [];
+    for (const d of renderedDimensions) {
+        const key = normalizeDimName(d.name);
+        if (!key) continue;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push({ name: key, value: d.value });
+    }
+
+    const body  = panel.querySelector('.dim-panel-body');
+    const count = panel.querySelector('.dim-panel-count');
+    if (!body || !count) return;
+
+    // ★ 다국어: "3개" / "3 items" 등 언어별 단위 접미사 적용
+    count.textContent = unique.length > 0 ? unique.length + currentPanelText.countUnit : '';
+
+    if (unique.length === 0) {
+        // ★ 다국어: "표시된 치수가 없습니다" 번역문 적용
+        body.innerHTML = '<div class="dim-panel-empty">' + escapeHtml(currentPanelText.empty) + '</div>';
+        panel.style.display = 'block';
+        return;
+    }
+
+    const rows = unique.map(d => {
+        const abbr = d.name;
+        const full = resolveDimDisplayName(abbr);
+        const hasMapping = (full !== abbr);
+        // ★ 다국어: "매핑된 치수명 없음" 번역문 적용 (title 속성)
+        const nameHtml = hasMapping
+            ? '<span class="dim-panel-name" title="' + escapeHtml(full) + '">' + escapeHtml(full) + '</span>'
+            : '<span class="dim-panel-name" style="color:#64748B;font-style:italic" title="' + escapeHtml(currentPanelText.noMapping) + '">—</span>';
+        return '<div class="dim-panel-row">' +
+            '<span class="dim-panel-abbr">' + escapeHtml(abbr) + '</span>' +
+            nameHtml +
+            '<span class="dim-panel-value">' + d.value.toFixed(1) + '</span>' +
+            '</div>';
+    }).join('');
+
+    body.innerHTML = rows;
+    panel.style.display = 'block';
+}
+
+/** XSS 방지 — 치수명/값 HTML 이스케이프 */
+function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/** 치수 참조 패널 리셋 — 데이터 보기 탭 전환 등에서 호출 */
+function resetDimPanel() {
+    options.dimPanel = false;
+    const panel = document.getElementById('dim-panel');
+    if (panel) {
+        panel.style.display = 'none';
+        const body = panel.querySelector('.dim-panel-body');
+        if (body) body.innerHTML = '';
+    }
 }
 
 // ═══════════════════════════════════════════════
@@ -3517,6 +5110,14 @@ window.onCSharpMessage = function (msg) {
                         dims[uK] = nV;
                         dims[key] = nV;
                     }
+                }
+                // ★ 치수 참조 패널용 매핑 수신 (C#에서 GetDimensionDisplayNames 결과 전달)
+                //   { field_name → display_name }
+                //   null/undefined면 빈 객체로 폴백 → 패널은 약어만 표시
+                if (msg.dimMeta && typeof msg.dimMeta === 'object') {
+                    applyDimMetaPayload(msg.dimMeta);
+                } else {
+                    currentDimMeta = {};
                 }
                 // ★ 연결부품 파싱
                 const linked = [];
@@ -3550,12 +5151,22 @@ window.onCSharpMessage = function (msg) {
                 // 모터 치수 로그
                 const motorKeys = ['LC','LH','LR','LX','L1(LL)','L2','LB','S','EnH','PCD(LA)'];
                 const motorLog = motorKeys.map(k => k+'='+(dims[k]??dims[k.toUpperCase()]??'?')).join(', ');
+
+                // ★ v50: 모터 옵션 수신 (SpecSelectorResponse.Options → JSON)
+                //   예: { "hasBrake": "true", "hasGearhead": "false", "bodyType": "Servo", ... }
+                //   값은 문자열이지만 JS에서 truthy 판정 가능 ("true"/"false" → 문자열 truthy 는 항상 true 이므로
+                //   resolveMotorOpts에서 === 'true' 비교로 정규화됨)
+                const motorOpts = msg.options || {};
+                const optLog = Object.keys(motorOpts).length > 0
+                    ? ' | options={' + Object.entries(motorOpts).map(([k,v]) => k+'='+v).join(',') + '}'
+                    : '';
+
                 logToCSharp('3D updateModel: ' + msg.partCode + ' | ' + motorLog +
                             ' | linkedParts=' + linked.length +
                             (linked.length > 0 ? ' [' + linked.map(lp =>
                                 lp.partCode + '(' + lp.mateAlign + ',off=' + lp.mateOffset + ',draw=' + lp.isDrawEnabled + ')'
-                            ).join(', ') + ']' : ''));
-                updateModel(msg.partCode, dims, linked);
+                            ).join(', ') + ']' : '') + optLog);
+                updateModel(msg.partCode, dims, linked, motorOpts);
                 
                 // ★ SD/SN 모델 로드 완료 후 치수 체크박스 껐다켜기 시뮬레이션
                 if ((msg.partCode === 'SD' || msg.partCode === 'SN') && options.dimensions) {
@@ -3610,7 +5221,13 @@ window.onCSharpMessage = function (msg) {
                 break;
             case 'setOption': 
                 options[msg.option] = msg.value; 
-                applyOptions();
+
+                // ★ 치수 참조 패널 토글 → 3D 라벨 재빌드 없이 패널만 갱신 (깜빡임 방지)
+                if (msg.option === 'dimPanel') {
+                    updateDimPanel();
+                } else {
+                    applyOptions();
+                }
                 
                 // ★ SD/SN 치수 강제 처리 (최후 해결책)
                 if (msg.option === 'dimensions' && msg.value === true && 
@@ -3642,6 +5259,23 @@ window.onCSharpMessage = function (msg) {
                 }
                 break;
             case 'resize':    onResize(); break;
+            case 'updateDimMeta': {
+                // ★ 치수명 매핑만 업데이트 (전체 모델 재렌더 없이)
+                //   SetDimensionMeta가 이미 로드된 모델에 대해 호출되면 이 커맨드로 전달됨
+                if (msg.dimMeta && typeof msg.dimMeta === 'object') {
+                    applyDimMetaPayload(msg.dimMeta);
+                } else {
+                    currentDimMeta = {};
+                }
+                // 현재 패널에 표시되어 있으면 즉시 갱신
+                updateDimPanel();
+                break;
+            }
+            case 'resetDimPanel': {
+                // ★ 탭 전환 등으로 패널을 강제 초기화
+                resetDimPanel();
+                break;
+            }
         }
     } catch (err) { logToCSharp('Error: ' + err.message); }
 };
@@ -3650,10 +5284,14 @@ function applyOptions() {
     if (dimGroup) dimGroup.visible = options.dimensions;
     setWireframe(options.wireframe);
     if (gridHelper) gridHelper.visible = options.grid;
+
     // 치수선 on/off → dimOnly 재생성
     if (currentPartCode) {
         clearGroup(dimGroup);
         if (options.dimensions) {
+            // ★ 치수 재빌드 시 수집 배열도 초기화 (기존 데이터 무효화)
+            renderedDimensions = [];
+
             // ★ SD/SN 플러머블록은 저장된 GS 파라미터 사용
             if (currentPartCode === 'SD' || currentPartCode === 'SN') {
                 const savedGS = sdGlobalState.GS || 0.1;
@@ -3673,6 +5311,13 @@ function applyOptions() {
                     console.error('applyOptions 다른 부품 치수 에러:', error.message);
                 }
             }
+
+            // ★ 치수선 재생성 후 패널 업데이트 (수집 배열 다시 채워짐)
+            updateDimPanel();
+        } else {
+            // 치수선 OFF → 패널도 빈 상태로 갱신 (표시 중이면 "표시된 치수 없음" 표시)
+            renderedDimensions = [];
+            updateDimPanel();
         }
     }
 }

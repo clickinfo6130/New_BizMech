@@ -12,9 +12,11 @@
  * maintained by the PartManager team.
  *
  * Protocol with the React parent:
- *   parent → iframe  { type:'setModel', partCode, dimensions, linkedParts, viewType }
+ *   parent → iframe  { type:'setModel', partCode, dimensions, linkedParts, viewType, dimMeta? }
  *                    { type:'setView',  viewType }
- *                    { type:'setOption', option, value }
+ *                    { type:'setOption', option, value }          // option:'dimPanel' toggles the dim reference panel
+ *                    { type:'updateDimMeta', dimMeta }            // refresh the dim-panel without re-rendering
+ *                    { type:'resetDimPanel' }                     // hide + uncheck the dim-panel (tab switch etc.)
  *                    { type:'resize' }
  *   iframe → parent  { type:'ready' }          (once the renderer calls sendToCSharp({type:'ready'}))
  *                    { type:'log', message }   (from logToCSharp)
@@ -56,11 +58,21 @@
         dimensions: d.dimensions || {},
         linkedParts: d.linkedParts || [],
         viewType: d.viewType,
+        // dimMeta carries the `{ field_name → display_name }` map used by the
+        // dimension reference panel. Forward it untouched — the renderer
+        // tolerates missing/empty values.
+        dimMeta: d.dimMeta || {},
       });
     } else if (d.type === 'setView') {
       callHandler({ command: 'setView', view: d.viewType });
     } else if (d.type === 'setOption') {
       callHandler({ command: 'setOption', option: d.option, value: d.value });
+    } else if (d.type === 'updateDimMeta') {
+      // Refresh dim-panel labels without re-rendering the model.
+      callHandler({ command: 'updateDimMeta', dimMeta: d.dimMeta || {} });
+    } else if (d.type === 'resetDimPanel') {
+      // Force-hide the dim panel (e.g., when the user switches tabs away).
+      callHandler({ command: 'resetDimPanel' });
     } else if (d.type === 'resize') {
       callHandler({ command: 'resize' });
     } else if (d.command) {

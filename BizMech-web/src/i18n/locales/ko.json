@@ -45,16 +45,32 @@
     "side": "측면도",
     "top": "평면도",
     "loading": "로딩 중...",
-    "empty": "부품을 선택하면 여기에 표시됩니다"
+    "empty": "부품을 선택하면 여기에 표시됩니다",
+    "dimPanel": "치수 패널",
+    "dimPanelHint": "약어 ↔ 전체 치수명 참조 패널"
   },
   "download": {
     "title": "다운로드",
     "step": "STEP",
+    "dxf": "DXF",
     "dwg": "DWG",
     "iges": "IGES",
     "stl": "STL",
+    "ipt": "IPT",
+    "sldprt": "SLDPRT",
+    "z3": "Z3",
     "hint": "원하는 포맷을 선택하여 저장하세요",
-    "nothing": "다운로드할 부품이 없습니다"
+    "nothing": "다운로드할 부품이 없습니다",
+    "generating": "생성 중...",
+    "cached": "캐시됨",
+    "fresh": "새로 생성",
+    "warning": "형상 다운로드 — 치수는 정확하지만 파라메트릭 편집은 불가합니다",
+    "warningDetail": "STEP/DXF 는 최종 형상만 저장합니다. 규격 변경 시 웹에서 새로 다운로드하세요.",
+    "notConfigured": "이 포맷은 아직 준비 중입니다 (Phase 2 — CAD Exchanger 연동 필요)",
+    "error": "다운로드 실패",
+    "retry": "다시 시도",
+    "sizeBytes": "{{kb}} KB",
+    "generatedMs": "{{ms}} ms"
   },
   "search": {
     "title": "주문코드 조회",

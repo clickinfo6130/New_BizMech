@@ -45,16 +45,32 @@
     "side": "側面",
     "top": "平面",
     "loading": "読み込み中…",
-    "empty": "部品を選択するとここに表示されます"
+    "empty": "部品を選択するとここに表示されます",
+    "dimPanel": "寸法パネル",
+    "dimPanelHint": "略語 ↔ 寸法名参照パネル"
   },
   "download": {
     "title": "ダウンロード",
     "step": "STEP",
+    "dxf": "DXF",
     "dwg": "DWG",
     "iges": "IGES",
     "stl": "STL",
+    "ipt": "IPT",
+    "sldprt": "SLDPRT",
+    "z3": "Z3",
     "hint": "保存する形式を選択してください",
-    "nothing": "ダウンロードする部品がありません"
+    "nothing": "ダウンロードする部品がありません",
+    "generating": "生成中...",
+    "cached": "キャッシュ",
+    "fresh": "新規生成",
+    "warning": "形状ダウンロード — 寸法は正確ですが、パラメトリック編集はできません",
+    "warningDetail": "STEP/DXF は最終形状のみを保存します。規格変更時はウェブから再ダウンロードしてください。",
+    "notConfigured": "このフォーマットは準備中です (Phase 2 — CAD Exchanger 連携が必要)",
+    "error": "ダウンロード失敗",
+    "retry": "再試行",
+    "sizeBytes": "{{kb}} KB",
+    "generatedMs": "{{ms}} ms"
   },
   "search": {
     "title": "注文コード検索",

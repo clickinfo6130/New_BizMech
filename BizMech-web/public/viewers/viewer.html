@@ -18,7 +18,15 @@
     <div id="viewer-container"></div>
     <!-- view-indicator는 WPF 컨트롤바에서 관리 (WebView2 환경) -->
     <div id="view-indicator" style="display:none;">ISO</div>
-    <!-- BizMech: postMessage bridge MUST load before the module. -->
+    <!-- ★ 치수 참조 패널 (약어 ↔ 전체명 매핑) — JS에서 동적 생성/제어 -->
+    <div id="dim-panel" style="display:none;">
+        <div class="dim-panel-header">
+            <span class="dim-panel-title">📏 치수 정보</span>
+            <span class="dim-panel-count"></span>
+        </div>
+        <div class="dim-panel-body"></div>
+    </div>
+    <!-- BizMech web: postMessage bridge MUST load before the renderer module. -->
     <script src="js/bridge.js"></script>
     <script type="module" src="js/partRenderer.js"></script>
 </body>

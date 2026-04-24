@@ -40,7 +40,29 @@
       "Bash(curl -s http://localhost:8091/api/parts/__TRACKED_VAR__/spec)",
       "Bash(npx tsc *)",
       "Bash(awk '{print $5}')",
-      "Bash(xargs -I{} taskkill //PID {} //F)"
+      "Bash(xargs -I{} taskkill //PID {} //F)",
+      "Bash(python \"C:/Users/kangby/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/3f66eed0-7c9f-44e8-b058-df771c068f09/70eb6e5f-0735-411d-8d7c-7e51233c0444/skills/docx/scripts/office/unpack.py\" \"D:/Work/pgm/New_Wizard_Pgms/BizMech개발/Doc/PartManager_Final_Report_v3.docx\" \"C:/Users/kangby/AppData/Local/Temp/pm_report_v3/\")",
+      "Bash(node test.mjs)",
+      "Bash(curl -s -X POST -H 'Content-Type: application/json' -d '{\"partCode\":\"HBOLT\",\"keyComposite\":\"HBOLT|KS B 1002|M10|기계용\",\"format\":\"STEP\"}' \"http://localhost:8092/api/download\")",
+      "Bash(python -m json.tool)",
+      "Bash(PORT=8092 npx tsx src/index.ts)",
+      "Bash(curl -s -X POST -H 'Content-Type: application/json; charset=utf-8' --data-binary @/tmp/dlreq.json \"http://localhost:8092/api/download\")",
+      "Bash(curl -s -o /tmp/bolt.stp -w 'status=%{http_code} size=%{size_download} time=%{time_total}s\\\\n' \"http://localhost:8092/api/download/file/0c6eb4d6b2a7adeba716d044baec7a0cc8e6b93f370b755de33f155efb4535bf\")",
+      "Bash(curl -s \"http://localhost:8092/api/download/file/0c6eb4d6b2a7adeba716d044baec7a0cc8e6b93f370b755de33f155efb4535bf\" grep -E 'CARTESIAN_POINT|CYLINDRICAL_SURFACE|MANIFOLD' /tmp/bolt2.stp)",
+      "Bash(curl -s \"http://localhost:8092/api/download/file/6ee2de735009888ac336775169624dc97d534b46273e96fba293f035cb58c2e4\")",
+      "Bash(xargs -r -I{} taskkill //PID {} //F)",
+      "Bash(npx tsx *)",
+      "Bash(grep -E '^\\\\[|---|^HEADER|^ISO|^\\\\$|status|Error|abort')",
+      "Bash(echo \"exit=$?\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('scripts:', d.get\\('scripts', {}\\)\\)\")",
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code} time:%{time_total}s\\\\n' -X POST -H 'Content-Type: application/json; charset=utf-8' --data-binary @/tmp/req_m12.json http://localhost:8080/api/download)",
+      "Bash(tasklist //FI \"PID eq 22208\")",
+      "Bash(taskkill //PID 22208 //F)",
+      "Bash(grep -A 30 '### ![]\\(https://bit.ly/2El7GLC\\) `BRep_Builder`' \"/d/Work/pgm/New_Wizard_Pgms/BizMech개발/bizmech-proxy/node_modules/opencascade.js/dist/Supported APIs.md\")",
+      "Bash(curl -s \"http://localhost:8080/api/parts/SGM-7/spec\" -o \"C:/Users/kangby/AppData/Local/Temp/sgm7-spec.json\")",
+      "Bash(pandoc --track-changes=all \"D:/Work/pgm/New_Wizard_Pgms/BizMech개발/참조용/MechClick3D_치수패널_구현보고서.docx\" -o \"C:/Users/kangby/AppData/Local/Temp/report.md\")",
+      "Bash(python C:/Users/kangby/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/3f66eed0-7c9f-44e8-b058-df771c068f09/70eb6e5f-0735-411d-8d7c-7e51233c0444/skills/docx/scripts/office/unpack.py D:/Work/pgm/New_Wizard_Pgms/BizMech개발/참조용/MechClick3D_치수패널_구현보고서.docx C:/Users/kangby/AppData/Local/Temp/report_unpacked)",
+      "Bash(python -c 'import json; json.load\\(open\\('\\\\''D:/Work/pgm/New_Wizard_Pgms/BizMech개발/BizMech-web/src/i18n/locales/__TRACKED_VAR__.json'\\\\'', encoding='\\\\''utf-8'\\\\''\\)\\); print\\('\\\\''__TRACKED_VAR__.json OK'\\\\''\\)')"
     ]
   }
 }

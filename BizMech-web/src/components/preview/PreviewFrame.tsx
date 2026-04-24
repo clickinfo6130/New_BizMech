@@ -3,8 +3,9 @@
  * (/viewers/viewer2D.html and /viewers/viewer.html).
  *
  * Communication (postMessage):
- *   React → iframe : { type:'setModel', partCode, dimensions, linkedParts, viewType }
- *                    { type:'setView',  viewType }
+ *   React → iframe : { type:'setModel',  partCode, dimensions, linkedParts, viewType, dimMeta }
+ *                    { type:'setView',   viewType }
+ *                    { type:'setOption', option:'dimPanel', value:boolean }   // dim reference panel toggle
  *   iframe → React : { type:'ready' }
  *                    { type:'log', msg }
  *
@@ -16,6 +17,12 @@
  *   metadata parsed by utils/linkedParts.ts. For each linked part name we
  *   asynchronously resolve its dimensions from the affected-pair mapping
  *   against the currently-selected main dimensions.
+ *
+ * ★ dimMeta is the `{ field_name → display_name }` map that powers the
+ *   좌상단 "치수 정보" reference panel. The renderer tolerates an empty
+ *   map (panel still shows abbreviations + values, display-name column
+ *   becomes "—"), so it's safe to always send even while the meta query
+ *   is loading.
  */
 import { useEffect, useMemo, useRef } from 'react';
 
@@ -37,12 +44,46 @@ interface Props {
   partCode: string | null;
   dimensions: Record<string, number | string>;
   viewType?: 'Front2D' | 'Side2D' | 'Top2D' | 'ISO';
+  /** `{ fieldName → Korean displayName }` — powers the reference panel. */
+  dimMeta?: Record<string, string>;
+  /** Toggle the 좌상단 dimension reference panel on/off. */
+  showDimPanel?: boolean;
 }
 
-export function PreviewFrame({ mode, partCode, dimensions, viewType }: Props) {
+export function PreviewFrame({
+  mode,
+  partCode,
+  dimensions,
+  viewType,
+  dimMeta,
+  showDimPanel,
+}: Props) {
   const ref = useRef<HTMLIFrameElement>(null);
   const readyRef = useRef(false);
-  const pendingRef = useRef<unknown | null>(null);
+  // ★ Queue ALL messages posted before the iframe signals ready. The
+  //   previous single-slot design dropped any message that arrived after
+  //   setModel (notably setOption{dimPanel}), so the dim reference panel
+  //   would flip back to OFF every time the user switched 2D↔3D —
+  //   because the mode switch re-mounts the iframe and the renderer's
+  //   internal showDimPanel defaults to false until setOption arrives.
+  const pendingRef = useRef<unknown[]>([]);
+
+  /**
+   * Send a message to the iframe, or queue it if the iframe hasn't
+   * signaled `ready` yet. Queued messages flush in arrival order once
+   * the handshake completes.
+   */
+  const postOrQueue = (payload: unknown) => {
+    if (!ref.current?.contentWindow) {
+      pendingRef.current.push(payload);
+      return;
+    }
+    if (readyRef.current) {
+      ref.current.contentWindow.postMessage(payload, '*');
+    } else {
+      pendingRef.current.push(payload);
+    }
+  };
 
   const linkedInfo = useSelectionStore((s) => s.linkedInfo);
   const dimension = useSelectionStore((s) => s.dimension);
@@ -60,15 +101,23 @@ export function PreviewFrame({ mode, partCode, dimensions, viewType }: Props) {
   const src = mode === '2d' ? '/viewers/viewer2D.html' : '/viewers/viewer.html';
 
   useEffect(() => {
+    // Reset handshake + queue when the iframe src changes (mode switch
+    // remounts the iframe, but we want explicit init on every new
+    // document load).
+    readyRef.current = false;
+    pendingRef.current = [];
+
     function onMessage(e: MessageEvent) {
       if (!ref.current || e.source !== ref.current.contentWindow) return;
       const data = e.data as { type?: string; msg?: string; message?: string } | null;
       if (!data || typeof data !== 'object') return;
       if (data.type === 'ready') {
         readyRef.current = true;
-        if (pendingRef.current && ref.current.contentWindow) {
-          ref.current.contentWindow.postMessage(pendingRef.current, '*');
-          pendingRef.current = null;
+        if (ref.current.contentWindow && pendingRef.current.length) {
+          for (const p of pendingRef.current) {
+            ref.current.contentWindow.postMessage(p, '*');
+          }
+          pendingRef.current = [];
         }
       } else if (data.type === 'log') {
         // eslint-disable-next-line no-console
@@ -82,20 +131,26 @@ export function PreviewFrame({ mode, partCode, dimensions, viewType }: Props) {
   // Push model updates to the iframe whenever inputs change.
   useEffect(() => {
     if (!partCode) return;
-    const payload = {
+    postOrQueue({
       type: 'setModel',
       partCode,
       dimensions,
       linkedParts: linkedPartsData,
       viewType: viewType ?? (mode === '2d' ? 'Front2D' : 'ISO'),
-    };
-    if (!ref.current?.contentWindow) return;
-    if (readyRef.current) {
-      ref.current.contentWindow.postMessage(payload, '*');
-    } else {
-      pendingRef.current = payload;
-    }
-  }, [partCode, dimensions, viewType, mode, linkedPartsData]);
+      dimMeta: dimMeta ?? {},
+    });
+    // postOrQueue is a stable helper; excluded from deps to avoid thrash.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partCode, dimensions, viewType, mode, linkedPartsData, dimMeta]);
+
+  // Toggle the dim panel without re-rendering the model. Goes through
+  // the same queue as setModel so the panel state survives the iframe
+  // remount that happens on 2D↔3D switch — without this the panel
+  // flipped OFF and the user had to re-check every time.
+  useEffect(() => {
+    postOrQueue({ type: 'setOption', option: 'dimPanel', value: !!showDimPanel });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showDimPanel, mode]);
 
   return (
     <iframe

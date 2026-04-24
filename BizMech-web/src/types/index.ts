@@ -151,20 +151,42 @@ export interface OrderCode {
 // Download
 // ─────────────────────────────────────────────────────────
 
-export type DownloadFormat = 'STEP' | 'DWG' | 'IGES' | 'STL';
+export type DownloadFormat = 'STEP' | 'DXF' | 'DWG' | 'IGES' | 'STL' | 'IPT' | 'SLDPRT' | 'Z3';
+
+/** Whether a format is generated locally (OCCT/DXF writer) or needs the CAD Exchanger API. */
+export type DownloadBackend = 'local' | 'exchanger';
 
 export interface DownloadRequest {
   partCode: string;
   keyComposite: string;
   format: DownloadFormat;
   locale?: Locale;
+  /**
+   * User-selected dimension overrides — values the user typed into
+   * EDITBOX / LISTBOX controls that aren't stored in the DB row. Keyed
+   * by the option's raw name (e.g. "전체길이", "L", "유효길이"). The
+   * proxy merges these on top of the DB-derived dimensions before the
+   * generator resolves aliases, so a user-changed length yields a file
+   * with the new length.
+   */
+  extraDimensions?: Record<string, number | string>;
 }
 
 export interface DownloadResult {
   fileName: string;
   mimeType: string;
-  /** URL (served by backend) or data URL (mock) */
+  /** URL the browser fetches — proxy-served hash URL or data-URL. */
   url: string;
+  /** Stable cache hash — same selection + format returns the same hash. */
+  hash?: string;
+  /** File size in bytes (compressed / wire size for the returned URL). */
+  sizeBytes?: number;
+  /** Whether the cache served this request (true = milliseconds, false = generated). */
+  fromCache?: boolean;
+  /** Generation time on the server in milliseconds (only meaningful when fromCache=false). */
+  generatedMs?: number;
+  /** Which backend produced the file (OCCT/DXF writer vs CAD Exchanger). */
+  backend?: DownloadBackend;
 }
 
 // ─────────────────────────────────────────────────────────

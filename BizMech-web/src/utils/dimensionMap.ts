@@ -134,6 +134,45 @@ export function mapColumnToKey(columnName: string): string | null {
 }
 
 /**
+ * Reverse of COLUMN_TO_KEY_MAP — { renderer-key → Korean display name }.
+ *
+ * The viewer's dimension reference panel uses DB `DimensionMeta` as the
+ * primary source of `fieldName → displayName`, but keys like `L` and `b`
+ * aren't registered in DimensionMeta because they're derived from
+ * user-facing spec options (전체길이, 나사길이) at runtime. Without a
+ * fallback, rows for those keys in the panel render a "—" dash — which
+ * is confusing to users who expect to see 전체길이 next to L.
+ *
+ * Port of `DynamicUIManager.GetDimDisplayNameFallbacks()` (참조용/UI/
+ * DynamicUIManager.cs line 97). Selection rules, in order:
+ *   1. Skip pure-ASCII names ("Length", "Size", "HeadHeight") — useless
+ *      for a Korean UI.
+ *   2. Skip identity mappings (모터사이즈 → 모터사이즈) — no display gain.
+ *   3. First arrival wins unless a later entry is STRICTLY LONGER
+ *      (전체길이 > 길이, 호칭지름 > 호칭).
+ *
+ * Consumers merge this into the API-provided dimMeta with DB priority:
+ *   const finalDimMeta = { ...DIM_DISPLAY_NAME_FALLBACKS, ...dbDimMeta }
+ */
+function computeDimDisplayNameFallbacks(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [korName, dimKey] of Object.entries(COLUMN_TO_KEY_MAP)) {
+    // Rule 1 — skip ASCII-only names.
+    if (/^[\x00-\x7F]+$/.test(korName)) continue;
+    // Rule 2 — skip identity mappings.
+    if (korName === dimKey) continue;
+    // Rule 3 — prefer the longer / more specific Korean name.
+    if (!out[dimKey] || korName.length > out[dimKey].length) {
+      out[dimKey] = korName;
+    }
+  }
+  return out;
+}
+
+export const DIM_DISPLAY_NAME_FALLBACKS: Record<string, string> =
+  computeDimDisplayNameFallbacks();
+
+/**
  * Merge spec option selections into a dimensions dict, adding both the
  * original option name AND — when a mapping exists — the English-key
  * alias (M, D, L, …) that the renderer looks up.

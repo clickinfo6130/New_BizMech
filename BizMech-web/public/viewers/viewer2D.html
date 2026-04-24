@@ -10,7 +10,16 @@
     <div id="canvas-container">
         <canvas id="canvas2d"></canvas>
     </div>
-    <!-- BizMech: postMessage bridge MUST load before the renderer. -->
+    <!-- ★ 치수 참조 패널 (약어 ↔ 전체명 매핑) — JS에서 동적 생성/제어
+         3D 뷰어와 동일 스타일, 동일 DOM 구조 사용 (viewer.css 재사용 패턴과 대칭) -->
+    <div id="dim-panel" style="display:none;">
+        <div class="dim-panel-header">
+            <span class="dim-panel-title">📏 치수 정보</span>
+            <span class="dim-panel-count"></span>
+        </div>
+        <div class="dim-panel-body"></div>
+    </div>
+    <!-- BizMech web: postMessage bridge MUST load before the renderer. -->
     <script src="js/bridge.js"></script>
     <script src="js/partRenderer2D.js"></script>
 </body>

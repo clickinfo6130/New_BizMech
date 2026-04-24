@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, Square, Eye } from 'lucide-react';
+import { Box, Square, Eye, Ruler } from 'lucide-react';
 
 import { useSelectionStore } from '@/store/selectionStore';
 import { PreviewFrame } from './PreviewFrame';
 import {
   applyDimensionKeyMapping,
+  DIM_DISPLAY_NAME_FALLBACKS,
   mergeOptionsIntoDimensions,
   resolveLengthAndThread,
 } from '@/utils/dimensionMap';
@@ -20,11 +21,32 @@ export function PreviewPanel() {
   const { t } = useTranslation();
   const [mode, setMode] = useState<Mode>('2d');
   const [view2d, setView2d] = useState<View2D>('Front2D');
+  // ★ Dimension reference panel — default OFF (matches PartManager). Toggled
+  //   via the "치수 패널" checkbox. Persists across part/mode changes in the
+  //   same session, matching the desktop-app behavior.
+  const [showDimPanel, setShowDimPanel] = useState(false);
 
   const partCode = useSelectionStore((s) => s.partCode);
   const spec = useSelectionStore((s) => s.spec);
   const dimension = useSelectionStore((s) => s.dimension);
   const specOptions = useSelectionStore((s) => s.specOptions);
+  const meta = useSelectionStore((s) => s.meta);
+
+  // Flatten DimensionMeta[] into a `{ fieldName → displayName }` dict for
+  // the iframe renderer, layered on top of the ColumnToDimKeyMap reverse
+  // mapping. This two-tier merge mirrors the C# reference's "DB first,
+  // fallback second" rule (docx report 3.5) — keys like `L` and `b` that
+  // exist only as user-facing spec parameters (전체길이, 나사길이) still
+  // get a Korean name in the panel even though they're absent from the
+  // per-part DimensionMeta row. DB values override the fallback where
+  // both exist.
+  const dimMeta = useMemo(() => {
+    const out: Record<string, string> = { ...DIM_DISPLAY_NAME_FALLBACKS };
+    for (const m of meta) {
+      if (m.fieldName && m.displayName) out[m.fieldName] = m.displayName;
+    }
+    return out;
+  }, [meta]);
 
   // ★ Build the combined dimensions dict the iframe renderer receives.
   // Full port of PartManager's preview pipeline:
@@ -96,13 +118,36 @@ export function PreviewPanel() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 rounded-xl bg-slate-100/80 p-1 backdrop-blur-sm ring-1 ring-inset ring-slate-200">
-          <TabButton active={mode === '2d'} onClick={() => setMode('2d')} icon={<Square className="h-3.5 w-3.5" />}>
-            {t('preview.2d')}
-          </TabButton>
-          <TabButton active={mode === '3d'} onClick={() => setMode('3d')} icon={<Box className="h-3.5 w-3.5" />}>
-            {t('preview.3d')}
-          </TabButton>
+        <div className="flex items-center gap-2">
+          {/* 치수 패널 toggle — label + checkbox kept compact so it fits
+              beside the 2D/3D switch without crowding the header. */}
+          <label
+            className={cn(
+              'flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-semibold transition',
+              showDimPanel
+                ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200'
+                : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700',
+            )}
+            title={t('preview.dimPanelHint', '약어 ↔ 전체 치수명 참조 패널')}
+          >
+            <input
+              type="checkbox"
+              checked={showDimPanel}
+              onChange={(e) => setShowDimPanel(e.target.checked)}
+              className="h-3 w-3 accent-brand-600"
+            />
+            <Ruler className="h-3.5 w-3.5" />
+            {t('preview.dimPanel', '치수 패널')}
+          </label>
+
+          <div className="flex items-center gap-1 rounded-xl bg-slate-100/80 p-1 backdrop-blur-sm ring-1 ring-inset ring-slate-200">
+            <TabButton active={mode === '2d'} onClick={() => setMode('2d')} icon={<Square className="h-3.5 w-3.5" />}>
+              {t('preview.2d')}
+            </TabButton>
+            <TabButton active={mode === '3d'} onClick={() => setMode('3d')} icon={<Box className="h-3.5 w-3.5" />}>
+              {t('preview.3d')}
+            </TabButton>
+          </div>
         </div>
       </div>
 
@@ -150,6 +195,8 @@ export function PreviewPanel() {
             partCode={partCode}
             dimensions={mergedDimensions}
             viewType={mode === '2d' ? view2d : 'ISO'}
+            dimMeta={dimMeta}
+            showDimPanel={showDimPanel}
           />
         )}
       </div>

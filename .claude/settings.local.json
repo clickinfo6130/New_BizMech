@@ -62,7 +62,9 @@
       "Bash(curl -s \"http://localhost:8080/api/parts/SGM-7/spec\" -o \"C:/Users/kangby/AppData/Local/Temp/sgm7-spec.json\")",
       "Bash(pandoc --track-changes=all \"D:/Work/pgm/New_Wizard_Pgms/BizMech개발/참조용/MechClick3D_치수패널_구현보고서.docx\" -o \"C:/Users/kangby/AppData/Local/Temp/report.md\")",
       "Bash(python C:/Users/kangby/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/3f66eed0-7c9f-44e8-b058-df771c068f09/70eb6e5f-0735-411d-8d7c-7e51233c0444/skills/docx/scripts/office/unpack.py D:/Work/pgm/New_Wizard_Pgms/BizMech개발/참조용/MechClick3D_치수패널_구현보고서.docx C:/Users/kangby/AppData/Local/Temp/report_unpacked)",
-      "Bash(python -c 'import json; json.load\\(open\\('\\\\''D:/Work/pgm/New_Wizard_Pgms/BizMech개발/BizMech-web/src/i18n/locales/__TRACKED_VAR__.json'\\\\'', encoding='\\\\''utf-8'\\\\''\\)\\); print\\('\\\\''__TRACKED_VAR__.json OK'\\\\''\\)')"
+      "Bash(python -c 'import json; json.load\\(open\\('\\\\''D:/Work/pgm/New_Wizard_Pgms/BizMech개발/BizMech-web/src/i18n/locales/__TRACKED_VAR__.json'\\\\'', encoding='\\\\''utf-8'\\\\''\\)\\); print\\('\\\\''__TRACKED_VAR__.json OK'\\\\''\\)')",
+      "Bash(rm -f cache/*.stp cache/*.json)",
+      "Read(//d/d/Work/pgm/New_Wizard_Pgms/BizMech개발/bizmech-proxy/**)"
     ]
   }
 }

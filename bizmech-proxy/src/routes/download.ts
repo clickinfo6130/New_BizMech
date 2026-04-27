@@ -36,6 +36,10 @@ interface DimRow {
   key_values: unknown;
 }
 
+interface SpecNameRow {
+  part_name: string | null;
+}
+
 async function loadDimensions(
   partCode: string,
   keyComposite: string,
@@ -63,10 +67,49 @@ async function loadDimensions(
   return { ...keyVals, ...dimData };
 }
 
+/**
+ * Look up `partspec.part_name` for the BOM metadata embedded into the
+ * generated STEP. Returns null if no spec row exists — the worker
+ * tolerates an absent partName (the post-processor falls back to the
+ * partCode in that case).
+ */
+async function loadPartName(partCode: string): Promise<string | null> {
+  try {
+    const pool = await poolForPartCode(partCode);
+    const rows = await query<SpecNameRow>(
+      pool,
+      `SELECT part_name FROM partspec
+        WHERE part_code = $1 AND is_active = TRUE LIMIT 1`,
+      [partCode],
+    );
+    return rows[0]?.part_name?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 function buildUrl(host: string | undefined, hash: string): string {
   const base = process.env.PUBLIC_BASE_URL?.trim() || `http://localhost:${process.env.PORT ?? 8080}`;
   void host; // kept for future X-Forwarded-Host handling
   return `${base}/api/download/file/${hash}`;
+}
+
+/**
+ * Pull the first non-empty string for any of the given alias keys out of
+ * a loose `Record<string, unknown>`. Used to harvest BOM-relevant values
+ * (재질, 표준번호 …) from the request's `extraDimensions` payload.
+ */
+function pickAlias(
+  src: Record<string, unknown>,
+  aliases: readonly string[],
+): string | undefined {
+  for (const k of aliases) {
+    const v = src[k];
+    if (v == null || v === '') continue;
+    if (typeof v === 'string' && v.trim()) return v.trim();
+    if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+  }
+  return undefined;
 }
 
 function isSupportedFormat(v: unknown): v is CadFormat {
@@ -112,14 +155,34 @@ router.post('/download', async (req, res) => {
     else if (typeof v === 'string') dimensions[k] = v;
   }
 
+  // Resolve BOM metadata from the same DB lookup as dimensions:
+  //   · partName  ← partspec.part_name (one extra query)
+  //   · standard  ← keyComposite's leading segment ("HBOLT|KS B 1002|M10"
+  //                  → "KS B 1002") OR the user-selected 표준번호 in
+  //                  extraDimensions if present (more specific, e.g.
+  //                  "KS B 1002:2016").
+  //   · material  ← body.material (already on the request)
+  //   The actual specification string ("M10X1.5-40L") is computed by
+  //   the bom-meta resolver from dimensions inside the worker.
+  const partName = await loadPartName(partCode);
+  let standard: string | undefined;
+  const extraStd = pickAlias(extraRaw, ['표준번호', 'standardNo', 'standard_no', 'standard']);
+  if (extraStd) standard = extraStd;
+  else if (keyComposite.includes('|')) {
+    const parts = keyComposite.split('|');
+    if (parts.length >= 2 && parts[1].trim()) standard = parts[1].trim();
+  }
+
   const canonical: CadGenerateRequest = {
     partCode,
     keyComposite,
     dimensions,
-    material: body.material ? String(body.material) : undefined,
+    material: body.material ? String(body.material) : pickAlias(extraRaw, ['재질', 'material']),
     surface: body.surface ? String(body.surface) : undefined,
     format,
     locale,
+    partName: partName ?? undefined,
+    standard,
   };
 
   // 2) Cache check — but skip entries marked `fallback: true`. Those

@@ -300,7 +300,16 @@ router.get('/download/file/:hash', (req, res) => {
     `attachment; filename="${encodeURIComponent(cached.sidecar.fileName)}"`,
   );
   res.setHeader('Content-Length', String(cached.sidecar.sizeBytes));
-  res.setHeader('Cache-Control', 'public, max-age=86400');
+  // The download URL is content-stable for a fixed (partCode, dimensions,
+  // format) tuple — same request → same hash in the URL — so a browser
+  // that aggressively caches will return the *previous* generation's
+  // bytes even after we regenerate server-side. `no-cache` here forces a
+  // conditional revalidation; combined with the always-200 response from
+  // the proxy this means the browser fetches fresh bytes every time. The
+  // server-side disk cache (`bizmech-proxy/cache/`) still saves
+  // OCCT compute time; this header only stops the BROWSER from
+  // shortcutting our changes.
+  res.setHeader('Cache-Control', 'no-cache, must-revalidate');
   return res.end(cached.bytes);
 });
 
